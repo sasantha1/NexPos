@@ -1,4 +1,4 @@
--- NexPos full database setup script
+-- NexPos schema-only database setup script
 -- Run this entire file in MySQL Workbench.
 
 CREATE DATABASE IF NOT EXISTS nexpos
@@ -57,11 +57,13 @@ CREATE TABLE employees (
   name VARCHAR(120) NOT NULL,
   email VARCHAR(160) NOT NULL UNIQUE,
   role VARCHAR(20) NOT NULL,
-  password_hash TEXT,
+  password_hash VARCHAR(255),
   sales_count INT NOT NULL DEFAULT 0,
   total_sales DECIMAL(12, 2) NOT NULL DEFAULT 0,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT chk_employees_role
+    CHECK (role IN ('Admin', 'Manager', 'Cashier'))
 ) ENGINE=InnoDB;
 
 CREATE TABLE discounts (
@@ -122,92 +124,6 @@ CREATE INDEX idx_orders_customer_id ON orders(customer_id);
 CREATE INDEX idx_orders_employee_id ON orders(employee_id);
 CREATE INDEX idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX idx_order_items_product_id ON order_items(product_id);
-
--- Seed products
-INSERT INTO products (id, name, description, barcode, category, price) VALUES
-  ('espresso', 'Espresso', 'Rich Italian espresso', 'espresso', 'Beverages', 3.50),
-  ('capuccino', 'Capuccino', 'Classic cappuccino', 'capuccino', 'Beverages', 4.50),
-  ('latte', 'Latte', 'Smooth latte', 'latte', 'Beverages', 4.00),
-  ('croissant', 'Croissant', 'Fresh butter croissant', 'croissant', 'Food', 3.00),
-  ('muffin', 'Muffin', 'Blueberry muffin', 'muffin', 'Food', 2.50),
-  ('sandwich', 'Sandwich', 'Turkey club sandwich', 'sandwich', 'Food', 6.50),
-  ('americano', 'Americano', 'Classic americano', 'americano', 'Beverages', 3.00),
-  ('mocha', 'Mocha', 'Chocolate mocha', 'mocha', 'Beverages', 5.00),
-  ('bagel', 'Bagel', 'Fresh bagel', 'bagel', 'Snacks', 2.00),
-  ('green-tea', 'Green Tea', 'Green tea', 'green-tea', 'Beverages', 3.00),
-  ('ice-chocolate', 'Iced Chocolate', 'Iced chocolate', 'ice-chocolate', 'Snacks', 4.00),
-  ('cookie', 'Cookie', 'Cookie', 'cookie', 'Desserts', 1.50);
-
--- Seed inventory
-INSERT INTO inventory_items (product_id, stock) VALUES
-  ('espresso', 100),
-  ('capuccino', 100),
-  ('latte', 100),
-  ('croissant', 50),
-  ('muffin', 40),
-  ('sandwich', 30),
-  ('americano', 100),
-  ('mocha', 100),
-  ('bagel', 60),
-  ('green-tea', 90),
-  ('ice-chocolate', 50),
-  ('cookie', 200);
-
--- Seed customers
-INSERT INTO customers (id, name, email, phone, loyalty_points, total_spent) VALUES
-  ('alice', 'Alice Johnson', 'alice@email.com', '555-0101', 250, 450.00),
-  ('bob', 'Bob Smith', 'bob@email.com', '555-0102', 500, 890.00),
-  ('carol', 'Carol White', 'carol@email.com', '555-0103', 150, 280.00);
-
--- Seed employees
-INSERT INTO employees (id, name, email, role, password_hash, sales_count, total_sales) VALUES
-  ('john', 'John Admin', 'john@pos.com', 'Admin', '$2b$10$7VqJ3uNuNRzygrz81YCAzuINsL3qwkdciRF.bs5hZ5zPBNH4OQO.G', 150, 12500.00),
-  ('sarah', 'Sarah Manager', 'sarah@pos.com', 'Manager', '$2b$10$7VqJ3uNuNRzygrz81YCAzuINsL3qwkdciRF.bs5hZ5zPBNH4OQO.G', 200, 18000.00),
-  ('mike', 'Mike Cashier', 'mike@pos.com', 'Cashier', '$2b$10$7VqJ3uNuNRzygrz81YCAzuINsL3qwkdciRF.bs5hZ5zPBNH4OQO.G', 300, 9500.00);
-
--- Seed discounts
-INSERT INTO discounts (id, name, type, value, code, active) VALUES
-  ('happy-hour', 'Happy Hour', 'percentage', 10, NULL, TRUE),
-  ('loyalty-15', 'Loyalty Discount', 'percentage', 15, 'LOYAL15', TRUE),
-  ('five-off', '$5 Off', 'fixed', 5, 'SAVES', TRUE),
-  ('save10', 'Save 10%', 'percentage', 10, 'SAVE10', TRUE),
-  ('save20', 'Save 20%', 'percentage', 20, 'SAVE20', TRUE);
-
--- Seed settings
-INSERT INTO settings_kv (`key`, `value`) VALUES
-  ('business', JSON_OBJECT(
-    'name', 'QuickPOS',
-    'address', '123 Main St City, State 12345',
-    'phone', '(555) 123-4567',
-    'email', 'contact@business.com'
-  )),
-  ('systemPrefs', JSON_OBJECT(
-    'soundEffects', TRUE,
-    'lowStockAlerts', TRUE,
-    'loyaltyProgram', TRUE
-  )),
-  ('tax', JSON_OBJECT(
-    'defaultTaxRate', 8.5,
-    'appliedTaxRate', 8.5
-  )),
-  ('receipts', JSON_OBJECT(
-    'printReceipts', TRUE,
-    'emailReceipts', FALSE,
-    'receiptHeaderText', 'Thank you for shopping with us!',
-    'receiptFooterText', 'Please come again!'
-  )),
-  ('hardware', JSON_OBJECT(
-    'receiptPrinter', FALSE,
-    'barcodeScanner', TRUE,
-    'cardReader', FALSE
-  )),
-  ('security', JSON_OBJECT(
-    'requirePin', TRUE,
-    'autoLogout', FALSE
-  ));
-
--- Optional quick checks:
--- SELECT COUNT(*) AS products_count FROM products;
--- SELECT COUNT(*) AS inventory_count FROM inventory_items;
--- SELECT COUNT(*) AS customers_count FROM customers;
+-- Schema-only setup: no seed data is inserted here.
+-- Application flows (especially /auth/register) should create rows.
 

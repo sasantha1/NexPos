@@ -1,16 +1,15 @@
 import { useState } from 'react'
-import { login } from './api/authApi'
+import { login, register } from './api/authApi'
 import './Login.css'
 
-const QUICK_USERS = [
-  { role: 'Admin', email: 'john@pos.com' },
-  { role: 'Manager', email: 'sarah@pos.com' },
-  { role: 'Cashier', email: 'mike@pos.com' },
-]
+const ROLE_OPTIONS = ['Admin', 'Manager', 'Cashier']
 
 export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('john@pos.com')
-  const [password, setPassword] = useState('admin123')
+  const [isRegisterMode, setIsRegisterMode] = useState(false)
+  const [name, setName] = useState('')
+  const [role, setRole] = useState('Cashier')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -19,7 +18,9 @@ export default function Login({ onLogin }) {
     setError('')
     setLoading(true)
     try {
-      const res = await login(email.trim(), password)
+      const res = isRegisterMode
+        ? await register({ name: name.trim(), email: email.trim(), password, role })
+        : await login(email.trim(), password)
       if (!res?.token || !res?.employee) throw new Error('Invalid login response')
       onLogin?.(res)
     } catch (err) {
@@ -33,26 +34,16 @@ export default function Login({ onLogin }) {
     <div className="lg-root">
       <div className="lg-card">
         <div className="lg-brand">NexPos</div>
-        <div className="lg-title">Sign In</div>
-        <div className="lg-sub">Admin, Manager, and Cashier access</div>
-
-        <div className="lg-quick">
-          {QUICK_USERS.map((u) => (
-            <button
-              key={u.role}
-              className="lg-quickBtn"
-              type="button"
-              onClick={() => {
-                setEmail(u.email)
-                setPassword('admin123')
-              }}
-            >
-              {u.role}
-            </button>
-          ))}
-        </div>
+        <div className="lg-title">{isRegisterMode ? 'Create Account' : 'Sign In'}</div>
+        <div className="lg-sub">{isRegisterMode ? 'Register a staff account to start using NexPos' : 'Sign in with your account'}</div>
 
         <form className="lg-form" onSubmit={handleSubmit}>
+          {isRegisterMode ? (
+            <label className="lg-label">
+              <span>Full Name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} className="lg-input" />
+            </label>
+          ) : null}
           <label className="lg-label">
             <span>Email</span>
             <input value={email} onChange={(e) => setEmail(e.target.value)} className="lg-input" />
@@ -61,11 +52,34 @@ export default function Login({ onLogin }) {
             <span>Password</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="lg-input" />
           </label>
+          {isRegisterMode ? (
+            <label className="lg-label">
+              <span>Role</span>
+              <select value={role} onChange={(e) => setRole(e.target.value)} className="lg-input">
+                {ROLE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
 
           {error ? <div className="lg-error">{error}</div> : null}
 
           <button className="lg-submit" type="submit" disabled={loading}>
-            {loading ? 'Signing in...' : 'Login'}
+            {loading ? (isRegisterMode ? 'Creating account...' : 'Signing in...') : isRegisterMode ? 'Create Account' : 'Login'}
+          </button>
+
+          <button
+            className="lg-quickBtn"
+            type="button"
+            onClick={() => {
+              setError('')
+              setIsRegisterMode((v) => !v)
+            }}
+          >
+            {isRegisterMode ? 'Already have an account? Sign in' : "Don't have an account? Register"}
           </button>
         </form>
       </div>
