@@ -853,7 +853,7 @@
 }
 
 .pos-receiptModal {
-  width: min(880px, 100%);
+  width: min(380px, 100%);
   background: #050a13;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 18px;
@@ -905,167 +905,193 @@
 }
 
 .pos-receiptPrintArea {
-  background: transparent;
-  color: rgba(229, 231, 235, 0.95);
-  border-radius: 14px;
-}
-
-.pos-receiptTop {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.pos-receiptTopRight {
-  text-align: right;
-}
-
-.pos-receiptBillTitle {
-  font-size: 12px;
-  color: rgba(229, 231, 235, 0.6);
-  font-weight: 900;
-  letter-spacing: 0.08em;
-}
-
-.pos-receiptBillNo {
-  margin-top: 3px;
-  color: #d1fae5;
-  font-weight: 1000;
-}
-
-.pos-receiptLogo {
-  width: 52px;
-  height: 52px;
-  display: flex;
-  align-items: center;
   justify-content: center;
-  margin-bottom: 10px;
+  padding: 4px 0;
 }
 
-.pos-receiptLogo img {
-  width: 100%;
-  height: 100%;
+/* 80mm ESC/POS sales receipt */
+.pos-receiptTicket {
+  width: 80mm;
+  max-width: 100%;
+  background: #ffffff;
+  color: #000000;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 11px;
+  line-height: 1.35;
+  padding: 3mm 2.5mm;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.pos-rcptLogoWrap {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 6px;
+}
+
+.pos-rcptLogo {
+  width: 52px;
+  height: auto;
   object-fit: contain;
 }
 
-.pos-receiptHeaderText {
-  font-weight: 1000;
-  font-size: 14px;
-  color: rgba(209, 250, 229, 0.95);
-  margin-bottom: 6px;
+.pos-rcptStoreName {
+  text-align: center;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  margin: 2px 0;
 }
 
-.pos-receiptBusinessName {
-  font-weight: 1000;
-  font-size: 18px;
-  margin-bottom: 2px;
+.pos-rcptCenter {
+  text-align: center;
+  font-size: 10px;
+  margin: 1px 0;
 }
 
-.pos-receiptAddress {
-  font-size: 13px;
-  color: rgba(229, 231, 235, 0.7);
-  margin-bottom: 12px;
+.pos-rcptSpacer {
+  height: 8px;
 }
 
-.pos-receiptMeta {
+.pos-rcptMetaGrid {
+  font-size: 10px;
+  margin: 2px 0;
+}
+
+.pos-rcptMetaLine {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
-  color: rgba(229, 231, 235, 0.82);
-  margin-bottom: 12px;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 2px 0;
 }
 
-.pos-receiptMetaLabel {
-  color: rgba(229, 231, 235, 0.6);
-  font-weight: 900;
+.pos-rcptMetaFull {
+  margin: 2px 0;
 }
 
-.pos-receiptDivider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.06);
-  margin-bottom: 12px;
+.pos-rcptRuleLight {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1;
+  margin: 5px 0;
 }
 
-.pos-receiptTable {
+.pos-rcptRuleLight::before {
+  content: '----------------------------------------';
+}
+
+.pos-rcptTable {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
-  margin-bottom: 14px;
+  font-size: 10px;
+  table-layout: fixed;
 }
 
-.pos-receiptTable th,
-.pos-receiptTable td {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 8px 4px;
-  text-align: left;
+.pos-rcptTable th,
+.pos-rcptTable td {
+  padding: 2px 1px;
   vertical-align: top;
 }
 
-.pos-receiptTable th {
-  font-weight: 1000;
-  color: rgba(229, 231, 235, 0.65);
+.pos-rcptTable th {
+  font-weight: 700;
+  text-align: left;
 }
 
-.pos-receiptTotalsRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
-  color: rgba(229, 231, 235, 0.85);
+.pos-rcptTable th:nth-child(2),
+.pos-rcptTable td:nth-child(2),
+.pos-rcptTable th:nth-child(3),
+.pos-rcptTable td:nth-child(3),
+.pos-rcptTable th:nth-child(4),
+.pos-rcptTable td:nth-child(4) {
+  text-align: right;
 }
 
-.pos-receiptTotalsRow strong {
-  font-weight: 1000;
-  color: #d1fae5;
+.pos-rcptTable th:nth-child(1),
+.pos-rcptTable td:nth-child(1) {
+  width: 42%;
 }
 
-.pos-receiptTotalsRowNet {
-  margin-top: 4px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 10px;
+.pos-rcptTable th:nth-child(2),
+.pos-rcptTable td:nth-child(2) {
+  width: 12%;
 }
 
-.pos-receiptTender {
-  margin-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 12px;
+.pos-rcptTable th:nth-child(3),
+.pos-rcptTable td:nth-child(3) {
+  width: 23%;
 }
 
-.pos-receiptTenderRow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-  font-size: 13px;
+.pos-rcptTable th:nth-child(4),
+.pos-rcptTable td:nth-child(4) {
+  width: 23%;
 }
 
-.pos-receiptTenderRow strong {
-  font-weight: 1000;
-  color: rgba(255, 255, 255, 0.92);
+.pos-rcptItemName {
+  word-break: break-word;
 }
 
-.pos-receiptDueLine {
-  margin-top: 6px;
-  font-size: 13px;
+.pos-rcptSummary {
+  margin: 2px 0;
+}
+
+.pos-rcptSummaryRow {
   display: flex;
   justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  margin: 2px 0;
 }
 
-.pos-receiptFooterText {
-  margin-top: 12px;
-  font-size: 12px;
-  color: rgba(229, 231, 235, 0.65);
-  font-weight: 800;
+.pos-rcptGrandTotal {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+
+.pos-rcptPayment {
+  margin: 2px 0;
+}
+
+.pos-rcptPaymentLine {
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+.pos-rcptFooterMsg {
   text-align: center;
+  font-size: 10px;
+  font-weight: 700;
   white-space: pre-wrap;
+  margin: 3px 0;
+}
+
+.pos-rcptQrPlaceholder {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin: 4px 0 2px;
+  padding: 10px 0;
+  border: 1px dashed #000000;
+}
+
+.pos-rcptQrHint {
+  text-align: center;
+  font-size: 9px;
+  margin-bottom: 2px;
 }
 
 .pos-receiptHideOnPrint {
   /* marker class; actual print behavior below */
+}
+
+@page {
+  size: 80mm auto;
+  margin: 0;
 }
 
 @media print {
@@ -1083,7 +1109,8 @@
     z-index: 99999;
   }
   .pos-receiptModal {
-    width: 100% !important;
+    width: 80mm !important;
+    max-width: 80mm !important;
     border: none !important;
     border-radius: 0 !important;
     background: #ffffff !important;
@@ -1094,17 +1121,15 @@
     display: none !important;
   }
   .pos-receiptPrintArea {
+    padding: 0 !important;
+  }
+  .pos-receiptTicket {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    box-shadow: none !important;
+    padding: 2mm !important;
     color: #000000 !important;
     background: #ffffff !important;
-    padding: 14px !important;
-  }
-  .pos-receiptTable th,
-  .pos-receiptTable td {
-    color: #000000 !important;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.1) !important;
-  }
-  .pos-receiptFooterText {
-    color: rgba(0, 0, 0, 0.6) !important;
   }
 }
 

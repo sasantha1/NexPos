@@ -33,6 +33,46 @@ function money(amount) {
   return `Rs. ${amount.toFixed(2)}`
 }
 
+function receiptAmount(amount) {
+  return Number(amount || 0).toFixed(2)
+}
+
+function formatBillNo(orderId) {
+  if (!orderId) return '—'
+  const year = new Date().getFullYear()
+  return `INV-${year}-${orderId}`
+}
+
+function formatReceiptDate(date) {
+  if (!date) return ''
+  const d = date instanceof Date ? date : new Date(date)
+  return d.toISOString().slice(0, 10)
+}
+
+function formatReceiptTime(date) {
+  if (!date) return ''
+  const d = date instanceof Date ? date : new Date(date)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function formatPaymentLabel(receipt) {
+  if (!receipt) return ''
+  const method = receipt.paymentMethod
+  if (method === 'card') {
+    const last4 = (receipt.cardNumber || '').replace(/\s/g, '').slice(-4)
+    return last4 ? `Visa (Ending ${last4})` : 'Card'
+  }
+  if (method === 'mobile') return receipt.mobileNumber ? `Mobile (${receipt.mobileNumber})` : 'Mobile Wallet'
+  if (method === 'online') return receipt.onlineAccountNumber ? `Online (${receipt.onlineAccountNumber})` : 'Online'
+  if (method === 'cash') return 'Cash'
+  return method ? String(method).toUpperCase() : ''
+}
+
+function truncateText(text, max = 16) {
+  const value = (text || '').toString()
+  return value.length > max ? `${value.slice(0, max - 1)}…` : value
+}
+
 function IconPlus() {
   return (
     <svg className="pos-btnIcon" viewBox="0 0 24 24" aria-hidden="true">
@@ -478,8 +518,10 @@ export default function Dashboard({ user, onLogout }) {
   const [downloadingBill, setDownloadingBill] = useState(false)
 
   const [businessInfo, setBusinessInfo] = useState({
-    name: '',
+    name: 'NexPos',
     address: '',
+    phone: '',
+    taxId: '',
   })
   const [receiptTexts, setReceiptTexts] = useState({
     header: '',
@@ -496,15 +538,16 @@ export default function Dashboard({ user, onLogout }) {
         const next = Number(fromSettings)
         setTaxRatePct(Number.isFinite(next) ? next : 8.5)
 
-        setBusinessInfo((p) => ({
-          ...p,
-          name: res?.business?.name || p.name,
-          address: res?.business?.address || p.address,
-        }))
+        setBusinessInfo({
+          name: res?.business?.name || 'NexPos',
+          address: res?.business?.address || '',
+          phone: res?.business?.phone || '',
+          taxId: res?.business?.taxId || '',
+        })
 
         setReceiptTexts({
-          header: res?.receipts?.receiptHeaderText || '',
-          footer: res?.receipts?.receiptFooterText || '',
+          header: res?.receipts?.receiptHeaderText || 'THANK YOU FOR SHOPPING!',
+          footer: res?.receipts?.receiptFooterText || 'Returns accepted in 14 days\nFollow us on IG: @nexpos',
         })
       } catch {
         // keep default
@@ -684,27 +727,14 @@ export default function Dashboard({ user, onLogout }) {
       const canvas = await html2canvas(receiptRef.current, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#0b0f15',
+        backgroundColor: '#ffffff',
       })
 
       const imgData = canvas.toDataURL('image/png')
-      const pdf = new jsPDF('p', 'mm', 'a4')
-      const pageWidth = pdf.internal.pageSize.getWidth()
-      const pageHeight = pdf.internal.pageSize.getHeight()
-      const imgWidth = pageWidth
-      const imgHeight = (canvas.height * imgWidth) / canvas.width
-
-      let heightLeft = imgHeight
-      let position = 0
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-      heightLeft -= pageHeight
-
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight
-        pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight)
-        heightLeft -= pageHeight
-      }
+      const pdfWidth = 80
+      const pdfHeight = Math.max((canvas.height * pdfWidth) / canvas.width, 40)
+      const pdf = new jsPDF({ unit: 'mm', format: [pdfWidth, pdfHeight] })
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight)
 
       const safeId = bill?.orderId ? String(bill.orderId) : 'unknown'
       pdf.save(`nexpos-bill-${safeId}.pdf`)
@@ -744,7 +774,7 @@ export default function Dashboard({ user, onLogout }) {
       const payload = {
         items: cartItems.map(({ product, qty }) => ({ productId: product.id, quantity: qty })),
         customerId: null,
-        employeeId: null,
+        employeeId: user?.id || null,
         discountCode: appliedDiscount?.code || null,
       }
       const res = await checkoutOrder(payload)
@@ -752,10 +782,12 @@ export default function Dashboard({ user, onLogout }) {
 
       const orderSubtotal = Number(res.subtotal ?? subtotal)
       const orderDiscountTotal = Number(res.discountTotal ?? discountAmount)
+      const orderTaxTotal = Number(res.taxTotal ?? 0)
       const orderNet = orderSubtotal - orderDiscountTotal
-      const orderTotal = Number(res.total ?? orderNet) // tax disabled, so total ~= net
+      const orderTotal = Number(res.total ?? orderNet + orderTaxTotal)
       const cashNumber = paymentMethod === 'cash' ? Number(cashReceived || 0) : 0
       const cashBalance = paymentMethod === 'cash' ? cashNumber - orderTotal : 0
+      const paidAmount = paymentMethod === 'cash' ? cashNumber : orderTotal
 
       const distDenom = Math.max(orderSubtotal, 0.00001)
       const receiptItems = cartSnapshot.map((it) => {
@@ -777,8 +809,11 @@ export default function Dashboard({ user, onLogout }) {
         orderId: res.orderId,
         dateTime: now,
         user: receiptUser,
+        cashierName: user?.name || 'Cashier',
+        customerName: 'Walk-in Customer',
         paymentMethod,
         cashAmount: cashNumber,
+        paidAmount,
         balance: cashBalance,
         cardNumber: paymentMethod === 'card' ? cardNumber : '',
         mobileNumber: paymentMethod === 'mobile' ? mobileNumber : '',
@@ -786,6 +821,8 @@ export default function Dashboard({ user, onLogout }) {
         totals: {
           amount: orderSubtotal,
           discount: orderDiscountTotal,
+          tax: orderTaxTotal,
+          taxRate: taxRatePct,
           netAmount: orderNet,
           totalDue: orderTotal,
         },
@@ -1214,110 +1251,101 @@ export default function Dashboard({ user, onLogout }) {
                 </div>
 
                 <div className="pos-receiptPrintArea" ref={receiptRef}>
-                  <div className="pos-receiptTop">
-                    <div className="pos-receiptLogo">
-                      <img src="/logo.png" alt="NexPos" />
+                  <div className="pos-receiptTicket">
+                    <div className="pos-rcptLogoWrap">
+                      <img className="pos-rcptLogo" src="/logo.png" alt="NexPos" />
                     </div>
-                    <div className="pos-receiptTopRight">
-                      <div className="pos-receiptBillTitle">SALES RECEIPT</div>
-                      <div className="pos-receiptBillNo">#{receipt?.orderId || '—'}</div>
-                    </div>
-                  </div>
 
-                  {receiptTexts.header ? <div className="pos-receiptHeaderText">{receiptTexts.header}</div> : null}
+                    <div className="pos-rcptStoreName">{businessInfo.name || 'NexPos'}</div>
+                    {businessInfo.address ? <div className="pos-rcptCenter">{businessInfo.address}</div> : null}
+                    {businessInfo.phone ? <div className="pos-rcptCenter">Tel: {businessInfo.phone}</div> : null}
+                    {businessInfo.taxId ? <div className="pos-rcptCenter">Tax ID: {businessInfo.taxId}</div> : null}
 
-                  <div className="pos-receiptBusinessName">{businessInfo.name || 'NexPos'}</div>
-                  {businessInfo.address ? <div className="pos-receiptAddress">{businessInfo.address}</div> : null}
+                    <div className="pos-rcptSpacer" />
 
-                  <div className="pos-receiptMeta">
-                    <div>
-                      <span className="pos-receiptMetaLabel">Date:</span>{' '}
-                      {receipt?.dateTime ? receipt.dateTime.toLocaleString() : ''}
-                    </div>
-                    <div>
-                      <span className="pos-receiptMetaLabel">User:</span> {receipt?.user || ''}
-                    </div>
-                    <div>
-                      <span className="pos-receiptMetaLabel">Receipt No:</span> {receipt?.orderId || ''}
-                    </div>
-                    <div>
-                      <span className="pos-receiptMetaLabel">Payment:</span>{' '}
-                      {receipt?.paymentMethod ? String(receipt.paymentMethod).toUpperCase() : ''}
-                    </div>
-                    {receipt?.paymentMethod === 'card' && receipt?.cardNumber ? (
-                      <div>
-                        <span className="pos-receiptMetaLabel">Card:</span> {receipt.cardNumber}
+                    <div className="pos-rcptMetaGrid">
+                      <div className="pos-rcptMetaLine">
+                        <span>Date: {formatReceiptDate(receipt?.dateTime)}</span>
+                        <span>Time: {formatReceiptTime(receipt?.dateTime)}</span>
                       </div>
-                    ) : null}
-                    {receipt?.paymentMethod === 'mobile' && receipt?.mobileNumber ? (
-                      <div>
-                        <span className="pos-receiptMetaLabel">Mobile:</span> {receipt.mobileNumber}
+                      <div className="pos-rcptMetaLine">
+                        <span>Bill No: {formatBillNo(receipt?.orderId)}</span>
+                        <span>Cashier: {receipt?.cashierName || ''}</span>
                       </div>
-                    ) : null}
-                    {receipt?.paymentMethod === 'online' && receipt?.onlineAccountNumber ? (
-                      <div>
-                        <span className="pos-receiptMetaLabel">Account:</span> {receipt.onlineAccountNumber}
-                      </div>
-                    ) : null}
-                  </div>
+                      <div className="pos-rcptMetaFull">Customer: {receipt?.customerName || 'Walk-in Customer'}</div>
+                    </div>
 
-                  <div className="pos-receiptDivider" />
+                    <div className="pos-rcptRuleLight" />
 
-                  <table className="pos-receiptTable" role="table" aria-label="Receipt items">
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        <th>Qty</th>
-                        <th>Unit</th>
-                        <th>Discount</th>
-                        <th>Amount</th>
-                        <th>Net</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(receipt?.items || []).map((it) => (
-                        <tr key={it.id}>
-                          <td className="pos-receiptItemName">{it.name}</td>
-                          <td className="pos-receiptQty">{it.qty}</td>
-                          <td>{money(it.unitPrice)}</td>
-                          <td>{money(it.discountLine || 0)}</td>
-                          <td>{money(it.lineAmount || 0)}</td>
-                          <td>{money(it.netLine || 0)}</td>
+                    <table className="pos-rcptTable" role="table" aria-label="Receipt items">
+                      <thead>
+                        <tr>
+                          <th>ITEM</th>
+                          <th>QTY</th>
+                          <th>PRICE</th>
+                          <th>TOTAL</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {(receipt?.items || []).map((it) => (
+                          <tr key={it.id}>
+                            <td className="pos-rcptItemName">{truncateText(it.name, 16)}</td>
+                            <td>{it.qty}</td>
+                            <td>{receiptAmount(it.unitPrice)}</td>
+                            <td>{receiptAmount(it.lineAmount || it.unitPrice * it.qty)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
 
-                  <div className="pos-receiptTotals">
-                    <div className="pos-receiptTotalsRow">
-                      <span>Amount</span>
-                      <strong>{money(receipt?.totals?.amount || 0)}</strong>
+                    <div className="pos-rcptRuleLight" />
+
+                    <div className="pos-rcptSummary">
+                      <div className="pos-rcptSummaryRow">
+                        <span>SUBTOTAL:</span>
+                        <span>{money(receipt?.totals?.amount || 0)}</span>
+                      </div>
+                      <div className="pos-rcptSummaryRow">
+                        <span>TAX/VAT ({receipt?.totals?.taxRate || 0}%):</span>
+                        <span>{money(receipt?.totals?.tax || 0)}</span>
+                      </div>
+                      <div className="pos-rcptSummaryRow">
+                        <span>DISCOUNT:</span>
+                        <span>-{money(receipt?.totals?.discount || 0)}</span>
+                      </div>
                     </div>
-                    <div className="pos-receiptTotalsRow">
-                      <span>Discount</span>
-                      <strong>{money(receipt?.totals?.discount || 0)}</strong>
+
+                    <div className="pos-rcptRuleLight" />
+
+                    <div className="pos-rcptGrandTotal">
+                      <span>GRAND TOTAL:</span>
+                      <strong>{money(receipt?.totals?.totalDue || 0)}</strong>
                     </div>
-                    <div className="pos-receiptTotalsRow pos-receiptTotalsRowNet">
-                      <span>Net Amount</span>
-                      <strong>{money(receipt?.totals?.netAmount || 0)}</strong>
+
+                    <div className="pos-rcptRuleLight" />
+
+                    <div className="pos-rcptPayment">
+                      <div className="pos-rcptPaymentLine">Payment Method: {formatPaymentLabel(receipt)}</div>
+                      <div className="pos-rcptSummaryRow">
+                        <span>Paid Amount:</span>
+                        <span>{money(receipt?.paidAmount || 0)}</span>
+                      </div>
+                      <div className="pos-rcptSummaryRow">
+                        <span>Change:</span>
+                        <span>{money(receipt?.balance || 0)}</span>
+                      </div>
                     </div>
+
+                    <div className="pos-rcptSpacer" />
+
+                    {receiptTexts.header ? <div className="pos-rcptFooterMsg">{receiptTexts.header}</div> : null}
+                    {receiptTexts.footer ? <div className="pos-rcptFooterMsg">{receiptTexts.footer}</div> : null}
+
+                    <div className="pos-rcptSpacer" />
+
+                    <div className="pos-rcptQrPlaceholder">[ QR CODE ]</div>
+                    <div className="pos-rcptQrHint">Scan to view e-receipt online</div>
                   </div>
-
-                  <div className="pos-receiptTender">
-                    <div className="pos-receiptTenderRow">
-                      <span>Cash Amount</span>
-                      <strong>{money(receipt?.cashAmount || 0)}</strong>
-                    </div>
-                    <div className="pos-receiptTenderRow">
-                      <span>Balance</span>
-                      <strong>{money(receipt?.balance || 0)}</strong>
-                    </div>
-                    <div className="pos-receiptDueLine">
-                      Total Due: <strong>{money(receipt?.totals?.totalDue || 0)}</strong>
-                    </div>
-                  </div>
-
-                  {receiptTexts.footer ? <div className="pos-receiptFooterText">{receiptTexts.footer}</div> : null}
                 </div>
               </div>
             </div>
