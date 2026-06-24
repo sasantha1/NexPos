@@ -32,7 +32,9 @@ export default function Login({ onLogin }) {
   return (
     <div className="lg-root">
       <div className="lg-card">
-        <div className="lg-brand">NexPos</div>
+        <div className="lg-brand">
+          <img className="lg-logo" src="/logo.png" alt="NexPos" />
+        </div>
         <div className="lg-title">Sign In</div>
         <div className="lg-sub">Admin, Manager, and Cashier access</div>
 

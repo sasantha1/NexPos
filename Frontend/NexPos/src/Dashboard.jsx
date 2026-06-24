@@ -809,7 +809,7 @@ export default function Dashboard({ user, onLogout }) {
     <div className="pos-root">
       <aside className="pos-sidebar">
         <div className="pos-brand">
-          <div className="pos-brand-dot" aria-hidden="true" />
+          <img className="pos-brand-logo" src="/logo.png" alt="NexPos" />
           <div>
             <div className="pos-brand-title">NexPos</div>
             <div className="pos-brand-subtitle">Wholesale and Retail</div>
@@ -1216,7 +1216,7 @@ export default function Dashboard({ user, onLogout }) {
                 <div className="pos-receiptPrintArea" ref={receiptRef}>
                   <div className="pos-receiptTop">
                     <div className="pos-receiptLogo">
-                      <span aria-hidden="true">{(businessInfo.name || 'N').slice(0, 1).toUpperCase()}</span>
+                      <img src="/logo.png" alt="NexPos" />
                     </div>
                     <div className="pos-receiptTopRight">
                       <div className="pos-receiptBillTitle">SALES RECEIPT</div>

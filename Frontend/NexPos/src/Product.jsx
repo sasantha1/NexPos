@@ -3,7 +3,7 @@ import './Product.css'
 import { listProducts, createProduct, updateProduct, deleteProduct } from './api/productsApi'
 
 function money(amount) {
-  return `$${amount.toFixed(2)}`
+  return `Rs. ${amount.toFixed(2)}`
 }
 
 function IconSearch() {

@@ -4,7 +4,7 @@ import { getReportsSummary } from './api/reportsApi'
 import { getInventoryItems, getInventoryStats } from './api/inventoryApi'
 
 function money(amount) {
-  return `$${amount.toFixed(2)}`
+  return `Rs. ${amount.toFixed(2)}`
 }
 
 function IconDollar() {
@@ -210,7 +210,7 @@ function SalesByCategoryCard({ segments, totalRevenue }) {
             Total
           </text>
           <text x="110" y="132" textAnchor="middle" fill="rgba(255,255,255,0.95)" fontSize="18" fontWeight="1000">
-            {totalRevenue ? `$${Math.round(totalRevenue).toLocaleString()}` : '—'}
+            {totalRevenue ? `Rs. ${Math.round(totalRevenue).toLocaleString()}` : '—'}
           </text>
         </svg>
 

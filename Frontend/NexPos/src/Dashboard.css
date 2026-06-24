@@ -23,12 +23,11 @@
   padding: 6px 4px 14px;
 }
 
-.pos-brand-dot {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #22c55e, #16a34a);
-  box-shadow: 0 10px 30px rgba(34, 197, 94, 0.15);
+.pos-brand-logo {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 
 .pos-brand-title {
@@ -937,17 +936,18 @@
 }
 
 .pos-receiptLogo {
-  width: 48px;
-  height: 48px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.35), rgba(34, 197, 94, 0.12));
-  border: 1px solid rgba(34, 197, 94, 0.35);
+  width: 52px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 1000;
-  color: #d1fae5;
   margin-bottom: 10px;
+}
+
+.pos-receiptLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .pos-receiptHeaderText {

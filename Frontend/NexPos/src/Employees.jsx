@@ -3,7 +3,7 @@ import './Employees.css'
 import { listEmployees, createEmployee, updateEmployee, deleteEmployee } from './api/employeesApi'
 
 function money(amount) {
-  return `$${amount.toFixed(2)}`
+  return `Rs. ${amount.toFixed(2)}`
 }
 
 function IconPlus() {

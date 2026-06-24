@@ -3,7 +3,7 @@ import './Customer.css'
 import { listCustomers, createCustomer, updateCustomer, deleteCustomer } from './api/customersApi'
 
 function money(amount) {
-  return `$${amount.toFixed(2)}`
+  return `Rs. ${amount.toFixed(2)}`
 }
 
 function IconPlus() {

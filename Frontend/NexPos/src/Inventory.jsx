@@ -3,7 +3,7 @@ import './Inventory.css'
 import { getInventoryItems, getInventoryStats, updateInventoryStock } from './api/inventoryApi'
 
 function money(amount) {
-  return `$${amount.toFixed(2)}`
+  return `Rs. ${amount.toFixed(2)}`
 }
 
 function IconSearch() {

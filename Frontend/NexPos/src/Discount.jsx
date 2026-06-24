@@ -9,7 +9,7 @@ import {
 } from './api/discountsApi'
 
 function money(amount) {
-  return `$${amount.toFixed(2)}`
+  return `Rs. ${amount.toFixed(2)}`
 }
 
 function IconTag() {
@@ -296,7 +296,7 @@ export default function Discount() {
                 filtered.map((r) => (
                   <tr key={r.id}>
                     <td className="dis-cellName">{r.name}</td>
-                    <td className="dis-cellType">{r.type === 'percentage' ? 'Percentage' : '$ Fixed'}</td>
+                    <td className="dis-cellType">{r.type === 'percentage' ? 'Percentage' : 'Rs Fixed'}</td>
                     <td className="dis-cellValue">{formatValue(r)}</td>
                     <td className="dis-cellCode">{r.code || '—'}</td>
                     <td>
@@ -351,7 +351,7 @@ export default function Discount() {
                   </select>
                 </label>
                 <label className="dis-label">
-                  <div className="dis-labelText">{form.type === 'percentage' ? 'Percentage value' : 'Fixed value ($)'}</div>
+                  <div className="dis-labelText">{form.type === 'percentage' ? 'Percentage value' : 'Fixed value (Rs)'}</div>
                   <input
                     className="dis-input"
                     inputMode="decimal"

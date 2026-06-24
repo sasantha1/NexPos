@@ -15,9 +15,15 @@
 }
 
 .lg-brand {
-  color: #22c55e;
-  font-weight: 1000;
-  font-size: 22px;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+
+.lg-logo {
+  width: min(180px, 70%);
+  height: auto;
+  object-fit: contain;
 }
 
 .lg-title {
