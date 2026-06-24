@@ -7,16 +7,9 @@ async function login(email, password) {
   })
 }
 
-async function register(payload) {
-  return apiRequest('/auth/register', {
-    method: 'POST',
-    body: payload,
-  })
-}
-
 async function me() {
   return apiRequest('/auth/me', { auth: true })
 }
 
-export { login, register, me }
+export { login, me }
 
