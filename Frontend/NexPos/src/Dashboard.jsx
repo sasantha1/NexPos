@@ -74,6 +74,59 @@ function truncateText(text, max = 16) {
   return value.length > max ? `${value.slice(0, max - 1)}…` : value
 }
 
+function isWeightProduct(product) {
+  return (product?.sellMode || 'unit') === 'weight'
+}
+
+function getPackageSize(product) {
+  const size = Number(product?.packageSize)
+  return Number.isFinite(size) && size > 0 ? size : 1
+}
+
+function calcLineTotal(product, amount) {
+  const price = Number(product?.price) || 0
+  if (isWeightProduct(product)) {
+    return price * (Number(amount) / getPackageSize(product))
+  }
+  return price * Number(amount)
+}
+
+function formatAmountLabel(product, amount) {
+  const unit = product?.packageUnit || 'piece'
+  const value = Number(amount)
+  if (unit === 'bottle') {
+    if (value === 0.5) return '1/2 bottle'
+    if (value === 0.25) return '1/4 bottle'
+    if (value === 1) return '1 bottle'
+    return `${value} bottle`
+  }
+  return `${value}${unit}`
+}
+
+function formatPriceLabel(product) {
+  if (isWeightProduct(product)) {
+    const size = getPackageSize(product)
+    const unit = product?.packageUnit || 'g'
+    if (unit === 'g' && size === 1000) return `${money(product.price)} / 1kg`
+    return `${money(product.price)} / ${size}${unit}`
+  }
+  return money(product.price)
+}
+
+function getWeightPresets(product) {
+  const unit = product?.packageUnit || 'g'
+  if (unit === 'bottle') return [0.25, 0.5, 1]
+  if (unit === 'kg' || unit === 'L') return [0.1, 0.25, 0.5, 1]
+  if (unit === 'g' || unit === 'ml') return [100, 250, 500, 1000]
+  return [0.25, 0.5, 1]
+}
+
+function getWeightUsedInCart(cartLines, productId) {
+  return cartLines
+    .filter((line) => line.productId === productId)
+    .reduce((sum, line) => sum + (line.mode === 'weight' ? Number(line.amount) : Number(line.qty)), 0)
+}
+
 function IconPlus() {
   return (
     <svg className="pos-btnIcon" viewBox="0 0 24 24" aria-hidden="true">
@@ -483,7 +536,10 @@ const NAV_ICONS_BY_ID = {
 export default function Dashboard({ user, onLogout }) {
   const [activeNav, setActiveNav] = useState('sales')
   const [activeCategory, setActiveCategory] = useState('')
-  const [cart, setCart] = useState({})
+  const [cartLines, setCartLines] = useState([])
+  const [weightModalProduct, setWeightModalProduct] = useState(null)
+  const [weightAmount, setWeightAmount] = useState('')
+  const [weightError, setWeightError] = useState('')
   const [discountCode, setDiscountCode] = useState('')
   const [appliedDiscount, setAppliedDiscount] = useState(null)
   const [productQuery, setProductQuery] = useState('')
@@ -694,20 +750,20 @@ export default function Dashboard({ user, onLogout }) {
   }, [products, activeCategory, productQuery, barcodeQuery])
 
   const cartItems = useMemo(() => {
-    const items = []
-    for (const [productId, qty] of Object.entries(cart)) {
-      if (!qty) continue
-      const product = products.find((p) => p.id === productId)
-      if (!product) continue
-      items.push({ product, qty })
-    }
-    // Stable order: by insertion order of current product list
-    items.sort((a, b) => products.findIndex((p) => p.id === a.product.id) - products.findIndex((p) => p.id === b.product.id))
-    return items
-  }, [cart, products])
+    return cartLines
+      .map((line) => {
+        const product = products.find((p) => p.id === line.productId)
+        if (!product) return null
+        const amount = line.mode === 'weight' ? Number(line.amount) : Number(line.qty)
+        const lineTotal = calcLineTotal(product, amount)
+        const amountLabel = line.mode === 'weight' ? formatAmountLabel(product, amount) : null
+        return { line, product, amount, lineTotal, amountLabel }
+      })
+      .filter(Boolean)
+  }, [cartLines, products])
 
   const subtotal = useMemo(() => {
-    return cartItems.reduce((sum, { product, qty }) => sum + product.price * qty, 0)
+    return cartItems.reduce((sum, { lineTotal }) => sum + lineTotal, 0)
   }, [cartItems])
 
   const discountAmount = useMemo(() => {
@@ -729,27 +785,88 @@ export default function Dashboard({ user, onLogout }) {
   const tax = 0
   const total = taxedBase + tax
 
-  function setQty(productId, nextQty) {
-    setCart((prev) => {
-      const qty = Math.max(0, nextQty)
-      const copy = { ...prev }
-      if (qty === 0) delete copy[productId]
-      else copy[productId] = qty
-      return copy
+  function addProductToCart(product) {
+    if (isWeightProduct(product)) {
+      setWeightModalProduct(product)
+      setWeightAmount('')
+      setWeightError('')
+      return
+    }
+
+    setCartLines((prev) => {
+      const idx = prev.findIndex((line) => line.productId === product.id && line.mode === 'unit')
+      const stock = Number(product.stock ?? 0)
+      if (idx >= 0) {
+        const current = prev[idx]
+        const nextQty = Math.min(current.qty + 1, stock)
+        if (nextQty <= 0) return prev.filter((line) => line.key !== current.key)
+        return prev.map((line) => (line.key === current.key ? { ...line, qty: nextQty } : line))
+      }
+      if (stock <= 0) return prev
+      return [...prev, { key: `${product.id}-unit`, productId: product.id, mode: 'unit', qty: 1 }]
     })
   }
 
-  function adjust(productId, delta) {
-    setCart((prev) => {
-      const current = prev[productId] ?? 0
-      const next = current + delta
-      const product = products.find((p) => p.id === productId)
-      const stock = Number(product?.stock ?? 0)
-      const copy = { ...prev }
-      if (next <= 0) delete copy[productId]
-      else copy[productId] = Math.min(next, Math.max(0, stock))
-      return copy
+  function adjustCartLine(lineKey, delta) {
+    setCartLines((prev) => {
+      const next = []
+      for (const line of prev) {
+        if (line.key !== lineKey) {
+          next.push(line)
+          continue
+        }
+        const product = products.find((p) => p.id === line.productId)
+        const stock = Number(product?.stock ?? 0)
+        if (line.mode === 'weight') continue
+        const qty = line.qty + delta
+        if (qty > 0) next.push({ ...line, qty: Math.min(qty, stock) })
+      }
+      return next
     })
+  }
+
+  function removeCartLine(lineKey) {
+    setCartLines((prev) => prev.filter((line) => line.key !== lineKey))
+  }
+
+  function closeWeightModal() {
+    setWeightModalProduct(null)
+    setWeightAmount('')
+    setWeightError('')
+  }
+
+  function addWeightLineToCart() {
+    const product = weightModalProduct
+    if (!product) return
+    const amount = Number(weightAmount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setWeightError('Enter a valid amount.')
+      return
+    }
+
+    const stock = Number(product.stock ?? 0)
+    const used = getWeightUsedInCart(cartLines, product.id)
+    if (used + amount > stock) {
+      setWeightError(`Only ${Math.max(0, stock - used)}${product.packageUnit || ''} available.`)
+      return
+    }
+
+    setCartLines((prev) => [
+      ...prev,
+      {
+        key: `${product.id}-w-${Date.now()}`,
+        productId: product.id,
+        mode: 'weight',
+        amount,
+      },
+    ])
+    closeWeightModal()
+  }
+
+  function unitQtyInCart(productId) {
+    return cartLines
+      .filter((line) => line.productId === productId && line.mode === 'unit')
+      .reduce((sum, line) => sum + Number(line.qty), 0)
   }
 
   const cashNumber = Number(cashReceived || 0)
@@ -762,6 +879,13 @@ export default function Dashboard({ user, onLogout }) {
     (paymentMethod !== 'card' || cardNumber.trim().length >= 8) &&
     (paymentMethod !== 'mobile' || mobileNumber.trim().length >= 8) &&
     (paymentMethod !== 'online' || onlineAccountNumber.trim().length >= 6)
+
+  const weightPreviewTotal = useMemo(() => {
+    if (!weightModalProduct) return 0
+    const amount = Number(weightAmount)
+    if (!Number.isFinite(amount) || amount <= 0) return 0
+    return calcLineTotal(weightModalProduct, amount)
+  }, [weightModalProduct, weightAmount])
 
   function openPaymentModal() {
     setPaymentMethod('cash')
@@ -852,15 +976,17 @@ export default function Dashboard({ user, onLogout }) {
     setIsCompletingSale(true)
     setCheckoutError('')
     try {
-      const cartSnapshot = cartItems.map(({ product, qty }) => ({
+      const cartSnapshot = cartItems.map(({ product, amount, lineTotal, amountLabel }) => ({
         id: product.id,
-        name: product.name,
-        qty,
-        unitPrice: Number(product.price),
+        name: amountLabel ? `${product.name} (${amountLabel})` : product.name,
+        qty: amountLabel ? 1 : amount,
+        qtyLabel: amountLabel || String(amount),
+        unitPrice: amountLabel ? lineTotal : Number(product.price),
+        lineAmount: lineTotal,
       }))
 
       const payload = {
-        items: cartItems.map(({ product, qty }) => ({ productId: product.id, quantity: qty })),
+        items: cartItems.map(({ product, amount }) => ({ productId: product.id, quantity: amount })),
         customerId: selectedCustomer?.id || null,
         employeeId: user?.id || null,
         discountCode: appliedDiscount?.code || null,
@@ -879,12 +1005,11 @@ export default function Dashboard({ user, onLogout }) {
 
       const distDenom = Math.max(orderSubtotal, 0.00001)
       const receiptItems = cartSnapshot.map((it) => {
-        const lineAmount = it.unitPrice * it.qty
+        const lineAmount = it.lineAmount
         const discountLine = orderDiscountTotal > 0 ? (lineAmount / distDenom) * orderDiscountTotal : 0
         const netLine = lineAmount - discountLine
         return {
           ...it,
-          lineAmount,
           discountLine,
           netLine,
         }
@@ -917,7 +1042,7 @@ export default function Dashboard({ user, onLogout }) {
         items: receiptItems,
       })
 
-      setCart({})
+      setCartLines([])
       setDiscountCode('')
       setAppliedDiscount(null)
       setSelectedCustomer(null)
@@ -1037,8 +1162,9 @@ export default function Dashboard({ user, onLogout }) {
 
             <div className="pos-grid" aria-label="Products">
               {visibleProducts.map((p) => {
-                const qty = cart[p.id] ?? 0
-                const isInCart = qty > 0
+                const qty = unitQtyInCart(p.id)
+                const weightUsed = isWeightProduct(p) ? getWeightUsedInCart(cartLines, p.id) : 0
+                const isInCart = qty > 0 || weightUsed > 0
                 const stock = Number(p.stock ?? 0)
                 const isOut = stock <= 0
                 return (
@@ -1046,17 +1172,21 @@ export default function Dashboard({ user, onLogout }) {
                     key={p.id}
                     type="button"
                     className={`pos-productCard ${isInCart ? 'inCart' : ''}`}
-                    onClick={() => adjust(p.id, 1)}
+                    onClick={() => addProductToCart(p)}
                     aria-label={`Add ${p.name} to order`}
                     disabled={isOut}
                   >
                     <div className="pos-productName">{p.name}</div>
                     <div className="pos-productBottom">
-                      <div className="pos-productPrice">{money(p.price)}</div>
+                      <div className="pos-productPrice">{formatPriceLabel(p)}</div>
                       {isOut ? (
                         <div className="pos-productQty">Out</div>
                       ) : isInCart ? (
-                        <div className="pos-productQty">x{qty}</div>
+                        <div className="pos-productQty">
+                          {qty > 0 ? `x${qty}` : null}
+                          {qty > 0 && weightUsed > 0 ? ' · ' : null}
+                          {weightUsed > 0 ? formatAmountLabel(p, weightUsed) : null}
+                        </div>
                       ) : (
                         <div className="pos-productAdd" aria-hidden="true">
                           <span className="pos-productAddSymbol">+</span>
@@ -1079,7 +1209,7 @@ export default function Dashboard({ user, onLogout }) {
                 className="pos-clearBtn"
                 type="button"
                 onClick={() => {
-                  setCart({})
+                  setCartLines([])
                   setDiscountCode('')
                   setAppliedDiscount(null)
                   setSelectedCustomer(null)
@@ -1118,34 +1248,47 @@ export default function Dashboard({ user, onLogout }) {
               {cartItems.length === 0 ? (
                 <div className="pos-emptyCart">Click products to add them to the order.</div>
               ) : (
-                cartItems.map(({ product, qty }) => (
-                  <div key={product.id} className="pos-cartRow">
+                cartItems.map(({ line, product, amount, lineTotal, amountLabel }) => (
+                  <div key={line.key} className="pos-cartRow">
                     <div className="pos-cartMain">
                       <div className="pos-cartName">{product.name}</div>
-                      <div className="pos-cartUnit">{money(product.price)} cash</div>
-                    </div>
-                    <div className="pos-qtyControls">
-                      <button
-                        className="pos-qtyBtn"
-                        type="button"
-                        onClick={() => adjust(product.id, -1)}
-                        aria-label={`Decrease ${product.name}`}
-                      >
-                        <IconMinus />
-                      </button>
-                      <div className="pos-qtyNum" aria-label={`Quantity ${qty}`}>
-                        {qty}
+                      <div className="pos-cartUnit">
+                        {amountLabel || `${amount}x`} · {formatPriceLabel(product)}
                       </div>
-                      <button
-                        className="pos-qtyBtn"
-                        type="button"
-                        onClick={() => adjust(product.id, 1)}
-                        aria-label={`Increase ${product.name}`}
-                      >
-                        <IconPlus />
-                      </button>
                     </div>
-                    <div className="pos-cartTotal">{money(product.price * qty)}</div>
+                    {line.mode === 'unit' ? (
+                      <div className="pos-qtyControls">
+                        <button
+                          className="pos-qtyBtn"
+                          type="button"
+                          onClick={() => adjustCartLine(line.key, -1)}
+                          aria-label={`Decrease ${product.name}`}
+                        >
+                          <IconMinus />
+                        </button>
+                        <div className="pos-qtyNum" aria-label={`Quantity ${amount}`}>
+                          {amount}
+                        </div>
+                        <button
+                          className="pos-qtyBtn"
+                          type="button"
+                          onClick={() => adjustCartLine(line.key, 1)}
+                          aria-label={`Increase ${product.name}`}
+                        >
+                          <IconPlus />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        className="pos-qtyBtn pos-cartRemoveBtn"
+                        type="button"
+                        onClick={() => removeCartLine(line.key)}
+                        aria-label={`Remove ${product.name}`}
+                      >
+                        ×
+                      </button>
+                    )}
+                    <div className="pos-cartTotal">{money(lineTotal)}</div>
                   </div>
                 ))
               )}
@@ -1311,6 +1454,61 @@ export default function Dashboard({ user, onLogout }) {
 
                 <button className="pos-payComplete" type="button" disabled={!canCompleteSale} onClick={completeSale}>
                   {isCompletingSale ? 'Processing...' : 'Complete Sale'}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {weightModalProduct ? (
+            <div className="pos-payBackdrop" role="dialog" aria-modal="true" aria-label="Select amount">
+              <div className="pos-customerModal pos-weightModal">
+                <button className="pos-payClose" type="button" onClick={closeWeightModal} aria-label="Close amount dialog">
+                  ×
+                </button>
+
+                <div className="pos-customerModalTitle">{weightModalProduct.name}</div>
+                <div className="pos-weightHint">
+                  Price: {formatPriceLabel(weightModalProduct)} — enter amount in {weightModalProduct.packageUnit || 'units'}
+                </div>
+
+                <div className="pos-weightPresets">
+                  {getWeightPresets(weightModalProduct).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      className={`pos-weightPresetBtn ${Number(weightAmount) === preset ? 'active' : ''}`}
+                      onClick={() => {
+                        setWeightAmount(String(preset))
+                        setWeightError('')
+                      }}
+                    >
+                      {formatAmountLabel(weightModalProduct, preset)}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="pos-customerField">
+                  <span>Custom amount ({weightModalProduct.packageUnit || 'unit'})</span>
+                  <input
+                    className="pos-input"
+                    inputMode="decimal"
+                    value={weightAmount}
+                    onChange={(e) => {
+                      setWeightAmount(e.target.value.replace(/[^0-9.]/g, ''))
+                      setWeightError('')
+                    }}
+                    placeholder={`e.g. 250 ${weightModalProduct.packageUnit || ''}`}
+                  />
+                </label>
+
+                <div className="pos-weightPreview">
+                  Line total: <strong>{money(weightPreviewTotal)}</strong>
+                </div>
+
+                {weightError ? <div className="pos-payError">{weightError}</div> : null}
+
+                <button className="pos-customerAddNewBtn" type="button" onClick={addWeightLineToCart}>
+                  Add to Order
                 </button>
               </div>
             </div>
@@ -1503,7 +1701,7 @@ export default function Dashboard({ user, onLogout }) {
                         {(receipt?.items || []).map((it) => (
                           <tr key={it.id}>
                             <td className="pos-rcptItemName">{truncateText(it.name, 16)}</td>
-                            <td>{it.qty}</td>
+                            <td>{it.qtyLabel || it.qty}</td>
                             <td>{receiptAmount(it.unitPrice)}</td>
                             <td>{receiptAmount(it.lineAmount || it.unitPrice * it.qty)}</td>
                           </tr>

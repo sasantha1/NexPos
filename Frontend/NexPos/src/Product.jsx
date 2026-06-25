@@ -101,6 +101,16 @@ function IconTrash() {
   )
 }
 
+function formatProductPrice(row) {
+  if ((row.sellMode || 'unit') === 'weight') {
+    const size = Number(row.packageSize) || 1
+    const unit = row.packageUnit || 'g'
+    if (unit === 'g' && size === 1000) return `${money(row.price)} / 1kg`
+    return `${money(row.price)} / ${size}${unit}`
+  }
+  return money(row.price)
+}
+
 export default function Product() {
   // TODO: replace with real API:
   // - GET /products
@@ -122,6 +132,9 @@ export default function Product() {
     category: '',
     price: '',
     stock: '',
+    sellMode: 'unit',
+    packageSize: '1',
+    packageUnit: 'piece',
   })
   const [editingId, setEditingId] = useState(null)
 
@@ -163,7 +176,7 @@ export default function Product() {
     setErrorMessage('')
     setModalMode('add')
     setEditingId(null)
-    setForm({ name: '', description: '', barcode: '', category: '', price: '', stock: '' })
+    setForm({ name: '', description: '', barcode: '', category: '', price: '', stock: '', sellMode: 'unit', packageSize: '1', packageUnit: 'piece' })
     setModalOpen(true)
   }
 
@@ -178,6 +191,9 @@ export default function Product() {
       category: row.category,
       price: String(row.price),
       stock: String(row.stock),
+      sellMode: row.sellMode || 'unit',
+      packageSize: String(row.packageSize ?? 1),
+      packageUnit: row.packageUnit || 'piece',
     })
     setModalOpen(true)
   }
@@ -191,6 +207,7 @@ export default function Product() {
   async function save() {
     const price = Number(form.price)
     const stock = Number(form.stock)
+    const packageSize = Number(form.packageSize)
     if (!form.name.trim() || !form.barcode.trim() || !form.category.trim()) {
       setErrorMessage('Please fill Product name, Barcode, and Category.')
       return
@@ -198,6 +215,22 @@ export default function Product() {
     if (!Number.isFinite(price) || !Number.isFinite(stock) || price < 0 || stock < 0) {
       setErrorMessage('Price and Stock must be valid numbers.')
       return
+    }
+    if (form.sellMode === 'weight' && (!Number.isFinite(packageSize) || packageSize <= 0)) {
+      setErrorMessage('Package size must be greater than 0 for weight sales.')
+      return
+    }
+
+    const productPayload = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      barcode: form.barcode.trim(),
+      category: form.category.trim(),
+      price,
+      stock,
+      sellMode: form.sellMode,
+      packageSize: form.sellMode === 'weight' ? packageSize : 1,
+      packageUnit: form.sellMode === 'weight' ? form.packageUnit : 'piece',
     }
 
     setSaving(true)
@@ -208,23 +241,11 @@ export default function Product() {
         const id = form.barcode.trim()
         await createProduct({
           id,
-          name: form.name.trim(),
-          description: form.description.trim(),
-          barcode: form.barcode.trim(),
-          category: form.category.trim(),
-          price,
-          stock,
+          ...productPayload,
         })
       } else {
         if (!editingId) return
-        await updateProduct(editingId, {
-          name: form.name.trim(),
-          description: form.description.trim(),
-          barcode: form.barcode.trim(),
-          category: form.category.trim(),
-          price,
-          stock,
-        })
+        await updateProduct(editingId, productPayload)
       }
 
       const res = await listProducts('')
@@ -313,8 +334,8 @@ export default function Product() {
                     </td>
                     <td>{r.barcode}</td>
                     <td>{r.category}</td>
-                    <td className="prd-price">{money(r.price)}</td>
-                    <td>{r.stock}</td>
+                    <td className="prd-price">{formatProductPrice(r)}</td>
+                    <td>{r.sellMode === 'weight' ? `${r.stock}${r.packageUnit || ''}` : r.stock}</td>
                     <td>
                       <div className="prd-actions">
                         <button className="prd-editBtn" type="button" onClick={() => openEdit(r)} aria-label={`Edit ${r.name}`}>
@@ -366,11 +387,42 @@ export default function Product() {
                   <input className="prd-input" value={form.category} onChange={(e) => setForm((p) => ({ ...p, category: e.target.value }))} />
                 </label>
                 <label className="prd-label">
-                  <div className="prd-labelText">Price</div>
+                  <div className="prd-labelText">Sell by</div>
+                  <select className="prd-input" value={form.sellMode} onChange={(e) => setForm((p) => ({ ...p, sellMode: e.target.value }))}>
+                    <option value="unit">Unit (each)</option>
+                    <option value="weight">Weight / Volume (100g, 250g, half bottle)</option>
+                  </select>
+                </label>
+                {form.sellMode === 'weight' ? (
+                  <>
+                    <label className="prd-label">
+                      <div className="prd-labelText">Price is for amount</div>
+                      <input
+                        className="prd-input"
+                        inputMode="decimal"
+                        value={form.packageSize}
+                        onChange={(e) => setForm((p) => ({ ...p, packageSize: e.target.value }))}
+                        placeholder="e.g. 1000 for 1kg"
+                      />
+                    </label>
+                    <label className="prd-label">
+                      <div className="prd-labelText">Unit</div>
+                      <select className="prd-input" value={form.packageUnit} onChange={(e) => setForm((p) => ({ ...p, packageUnit: e.target.value }))}>
+                        <option value="g">g (grams)</option>
+                        <option value="kg">kg</option>
+                        <option value="ml">ml</option>
+                        <option value="L">L</option>
+                        <option value="bottle">bottle</option>
+                      </select>
+                    </label>
+                  </>
+                ) : null}
+                <label className="prd-label">
+                  <div className="prd-labelText">{form.sellMode === 'weight' ? 'Price for package' : 'Price'}</div>
                   <input className="prd-input" inputMode="decimal" value={form.price} onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))} />
                 </label>
                 <label className="prd-label">
-                  <div className="prd-labelText">Stock</div>
+                  <div className="prd-labelText">{form.sellMode === 'weight' ? `Stock (${form.packageUnit})` : 'Stock'}</div>
                   <input className="prd-input" inputMode="numeric" value={form.stock} onChange={(e) => setForm((p) => ({ ...p, stock: e.target.value }))} />
                 </label>
               </div>

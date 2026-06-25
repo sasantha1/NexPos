@@ -27,13 +27,16 @@ CREATE TABLE products (
   barcode VARCHAR(64) NOT NULL UNIQUE,
   category VARCHAR(64) NOT NULL,
   price DECIMAL(10, 2) NOT NULL,
+  sell_mode VARCHAR(20) NOT NULL DEFAULT 'unit',
+  package_size DECIMAL(12, 3) NOT NULL DEFAULT 1,
+  package_unit VARCHAR(20) NOT NULL DEFAULT 'piece',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 CREATE TABLE inventory_items (
   product_id VARCHAR(64) NOT NULL,
-  stock INT NOT NULL DEFAULT 0,
+  stock DECIMAL(12, 3) NOT NULL DEFAULT 0,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (product_id),
   CONSTRAINT fk_inventory_product
@@ -104,7 +107,7 @@ CREATE TABLE order_items (
   order_id BIGINT UNSIGNED NOT NULL,
   product_id VARCHAR(64) NOT NULL,
   product_name VARCHAR(120) NOT NULL,
-  quantity INT NOT NULL,
+  quantity DECIMAL(12, 3) NOT NULL,
   unit_price DECIMAL(10, 2) NOT NULL,
   line_total DECIMAL(12, 2) NOT NULL,
   CONSTRAINT fk_order_items_order

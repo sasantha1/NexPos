@@ -10,7 +10,8 @@ router.get('/', optionalAuth, async (req, res, next) => {
     const search = (req.query.search || '').toString().trim()
 
     let sql = `
-      SELECT p.id, p.name, p.description, p.barcode, p.category, p.price, i.stock
+      SELECT p.id, p.name, p.description, p.barcode, p.category, p.price,
+             p.sell_mode, p.package_size, p.package_unit, i.stock
       FROM products p
       JOIN inventory_items i ON i.product_id = p.id
     `
@@ -35,6 +36,9 @@ router.get('/', optionalAuth, async (req, res, next) => {
         barcode: r.barcode,
         category: r.category,
         price: Number(r.price),
+        sellMode: r.sell_mode || 'unit',
+        packageSize: Number(r.package_size ?? 1),
+        packageUnit: r.package_unit || 'piece',
         stock: Number(r.stock),
       })),
     })
@@ -46,15 +50,19 @@ router.get('/', optionalAuth, async (req, res, next) => {
 router.post('/', optionalAuth, async (req, res, next) => {
   try {
     const pool = getPool()
-    const { id, name, description, barcode, category, price, stock } = req.body || {}
+    const { id, name, description, barcode, category, price, stock, sellMode, packageSize, packageUnit } = req.body || {}
 
     if (!name || !barcode || !category) return res.status(400).json({ message: 'name, barcode, category are required' })
 
     const productId = (id || barcode).toString()
     const priceNum = Number(price)
     const stockNum = Number(stock)
+    const sellModeVal = (sellMode || 'unit').toString()
+    const packageSizeNum = Number(packageSize ?? 1)
+    const packageUnitVal = (packageUnit || 'piece').toString()
     if (!Number.isFinite(priceNum) || priceNum < 0) return res.status(400).json({ message: 'price must be a number >= 0' })
     if (!Number.isFinite(stockNum) || stockNum < 0) return res.status(400).json({ message: 'stock must be a number >= 0' })
+    if (!Number.isFinite(packageSizeNum) || packageSizeNum <= 0) return res.status(400).json({ message: 'packageSize must be > 0' })
 
     const conn = await pool.getConnection()
     try {
@@ -62,16 +70,19 @@ router.post('/', optionalAuth, async (req, res, next) => {
 
       await conn.query(
         `
-        INSERT INTO products (id, name, description, barcode, category, price)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO products (id, name, description, barcode, category, price, sell_mode, package_size, package_unit)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
           name = VALUES(name),
           description = VALUES(description),
           barcode = VALUES(barcode),
           category = VALUES(category),
-          price = VALUES(price)
+          price = VALUES(price),
+          sell_mode = VALUES(sell_mode),
+          package_size = VALUES(package_size),
+          package_unit = VALUES(package_unit)
         `,
-        [productId, name, description || null, barcode, category, priceNum]
+        [productId, name, description || null, barcode, category, priceNum, sellModeVal, packageSizeNum, packageUnitVal]
       )
 
       await conn.query(
@@ -101,14 +112,18 @@ router.put('/:id', optionalAuth, async (req, res, next) => {
   try {
     const pool = getPool()
     const productId = req.params.id
-    const { name, description, barcode, category, price, stock } = req.body || {}
+    const { name, description, barcode, category, price, stock, sellMode, packageSize, packageUnit } = req.body || {}
 
     if (!productId || !name || !barcode || !category) return res.status(400).json({ message: 'name, barcode, category are required' })
 
     const priceNum = Number(price)
     const stockNum = Number(stock)
+    const sellModeVal = (sellMode || 'unit').toString()
+    const packageSizeNum = Number(packageSize ?? 1)
+    const packageUnitVal = (packageUnit || 'piece').toString()
     if (!Number.isFinite(priceNum) || priceNum < 0) return res.status(400).json({ message: 'price must be a number >= 0' })
     if (!Number.isFinite(stockNum) || stockNum < 0) return res.status(400).json({ message: 'stock must be a number >= 0' })
+    if (!Number.isFinite(packageSizeNum) || packageSizeNum <= 0) return res.status(400).json({ message: 'packageSize must be > 0' })
 
     const conn = await pool.getConnection()
     try {
@@ -117,10 +132,10 @@ router.put('/:id', optionalAuth, async (req, res, next) => {
       await conn.query(
         `
         UPDATE products
-        SET name = ?, description = ?, barcode = ?, category = ?, price = ?
+        SET name = ?, description = ?, barcode = ?, category = ?, price = ?, sell_mode = ?, package_size = ?, package_unit = ?
         WHERE id = ?
         `,
-        [name, description || null, barcode, category, priceNum, productId]
+        [name, description || null, barcode, category, priceNum, sellModeVal, packageSizeNum, packageUnitVal, productId]
       )
 
       await conn.query(

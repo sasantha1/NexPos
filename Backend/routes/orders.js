@@ -9,7 +9,41 @@ function normalizeCode(code) {
 
 function toMoney(n) {
   const x = Number(n)
-  return Number.isFinite(x) ? x : 0
+  return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0
+}
+
+function isWeightProduct(product) {
+  return (product?.sell_mode || 'unit') === 'weight'
+}
+
+function getPackageSize(product) {
+  const size = Number(product?.package_size)
+  return Number.isFinite(size) && size > 0 ? size : 1
+}
+
+function formatSoldAmount(product, amount) {
+  const unit = product?.package_unit || 'piece'
+  const value = Number(amount)
+  if (unit === 'bottle') {
+    if (value === 0.5) return '1/2 bottle'
+    if (value === 0.25) return '1/4 bottle'
+    if (value === 1) return '1 bottle'
+    return `${value} bottle`
+  }
+  return `${value}${unit}`
+}
+
+function calcLinePricing(product, quantity) {
+  const qty = Number(quantity)
+  if (isWeightProduct(product)) {
+    const packageSize = getPackageSize(product)
+    const lineTotal = toMoney(Number(product.price) * (qty / packageSize))
+    const unitPrice = toMoney(Number(product.price) / packageSize)
+    return { quantity: qty, unitPrice, lineTotal }
+  }
+  const unitQty = Math.floor(qty)
+  const unitPrice = toMoney(Number(product.price))
+  return { quantity: unitQty, unitPrice, lineTotal: toMoney(unitPrice * unitQty) }
 }
 
 router.post('/checkout', optionalAuth, async (req, res, next) => {
@@ -38,7 +72,7 @@ router.post('/checkout', optionalAuth, async (req, res, next) => {
       const productIds = normalizedItems.map((x) => x.productId)
       const uniqIds = Array.from(new Set(productIds))
       const [products] = await conn.query(
-        `SELECT id, name, price FROM products WHERE id IN (${uniqIds.map(() => '?').join(',')}) FOR UPDATE`,
+        `SELECT id, name, price, sell_mode, package_size, package_unit FROM products WHERE id IN (${uniqIds.map(() => '?').join(',')}) FOR UPDATE`,
         uniqIds
       )
       const productMap = new Map(products.map((p) => [p.id, p]))
@@ -54,12 +88,17 @@ router.post('/checkout', optionalAuth, async (req, res, next) => {
 
       // Stock check + subtotal
       let subtotal = 0
+      const pricedItems = []
       for (const it of normalizedItems) {
+        const product = productMap.get(it.productId)
         const currentStock = invMap.get(it.productId)
         if (currentStock === undefined) return res.status(404).json({ message: `Inventory not found for: ${it.productId}` })
-        if (currentStock < it.quantity) return res.status(400).json({ message: `Insufficient stock for ${it.productId}` })
-        const price = Number(productMap.get(it.productId).price)
-        subtotal += price * it.quantity
+        const pricing = calcLinePricing(product, it.quantity)
+        if (currentStock < pricing.quantity) {
+          return res.status(400).json({ message: `Insufficient stock for ${product.name}` })
+        }
+        subtotal += pricing.lineTotal
+        pricedItems.push({ ...it, product, ...pricing })
       }
 
       subtotal = toMoney(subtotal)
@@ -113,17 +152,17 @@ router.post('/checkout', optionalAuth, async (req, res, next) => {
       const orderId = orderResult.insertId
 
       // Insert items + decrement inventory
-      for (const it of normalizedItems) {
-        const product = productMap.get(it.productId)
-        const unitPrice = Number(product.price)
-        const lineTotal = unitPrice * it.quantity
+      for (const it of pricedItems) {
+        const product = it.product
+        const soldLabel = isWeightProduct(product) ? formatSoldAmount(product, it.quantity) : null
+        const productName = soldLabel ? `${product.name} (${soldLabel})` : product.name
 
         await conn.query(
           `
             INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, line_total)
             VALUES (?, ?, ?, ?, ?, ?)
           `,
-          [orderId, it.productId, product ? product.name : it.productId, it.quantity, unitPrice, lineTotal]
+          [orderId, it.productId, productName, it.quantity, it.unitPrice, it.lineTotal]
         )
 
         await conn.query(
