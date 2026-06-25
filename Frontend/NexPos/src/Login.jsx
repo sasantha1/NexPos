@@ -2,15 +2,9 @@ import { useState } from 'react'
 import { login } from './api/authApi'
 import './Login.css'
 
-const QUICK_USERS = [
-  { role: 'Admin', email: 'john@pos.com' },
-  { role: 'Manager', email: 'sarah@pos.com' },
-  { role: 'Cashier', email: 'mike@pos.com' },
-]
-
 export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('john@pos.com')
-  const [password, setPassword] = useState('admin123')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,24 +29,8 @@ export default function Login({ onLogin }) {
         <div className="lg-brand">
           <img className="lg-logo" src="/logo.png" alt="NexPos" />
         </div>
-        <div className="lg-title">Sign In</div>
-        <div className="lg-sub">Admin, Manager, and Cashier access</div>
-
-        <div className="lg-quick">
-          {QUICK_USERS.map((u) => (
-            <button
-              key={u.role}
-              className="lg-quickBtn"
-              type="button"
-              onClick={() => {
-                setEmail(u.email)
-                setPassword('admin123')
-              }}
-            >
-              {u.role}
-            </button>
-          ))}
-        </div>
+        <div className="lg-title">NexPos</div>
+        <div className="lg-sub">Sign in with your employee account</div>
 
         <form className="lg-form" onSubmit={handleSubmit}>
           <label className="lg-label">

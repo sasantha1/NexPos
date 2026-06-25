@@ -38,6 +38,12 @@ function requireAuth(req, res, next) {
   }
 }
 
+function requireAdmin(req, res, next) {
+  if (!req.user) return res.status(401).json({ message: 'Authentication required' })
+  if (req.user.role !== 'Admin') return res.status(403).json({ message: 'Admin access required' })
+  return next()
+}
+
 function signToken(payload) {
   const secret = process.env.JWT_SECRET || 'dev-secret'
   const expiresIn = process.env.JWT_EXPIRES_IN || '8h'
@@ -47,6 +53,7 @@ function signToken(payload) {
 module.exports = {
   optionalAuth,
   requireAuth,
+  requireAdmin,
   signToken,
 }
 

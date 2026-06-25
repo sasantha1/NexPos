@@ -108,46 +108,52 @@ function CardShell({ icon, title, subtitle, right }) {
 
 const TABS = ['General', 'Tax & Pricing', 'Receipts', 'Hardware', 'Security']
 
-export default function Settings() {
+export default function Settings({ user }) {
   const [tab, setTab] = useState('General')
+  const isAdmin = user?.role === 'Admin'
 
   const [business, setBusiness] = useState({
-    name: 'QuickPOS',
-    address: '123 Main St City, State 12345',
-    phone: '(555) 123-4567',
-    email: 'contact@business.com',
+    name: 'NexPos',
+    address: '',
+    phone: '',
+    email: '',
+    taxId: '',
+    storeId: '#0001',
+    register: 'POS-01',
   })
 
   const [systemPrefs, setSystemPrefs] = useState({
+    systemName: 'NexPos',
     soundEffects: true,
     lowStockAlerts: true,
     loyaltyProgram: true,
   })
 
   const [tax, setTax] = useState({
-    defaultTaxRate: '8.5',
-    appliedTaxRate: '8.5',
+    defaultTaxRate: '0',
+    appliedTaxRate: '0',
   })
 
   const [receipts, setReceipts] = useState({
     printReceipts: true,
     emailReceipts: false,
-    receiptHeaderText: 'Thank you for shopping with us!',
-    receiptFooterText: 'Please come again!',
+    receiptHeaderText: 'THANK YOU FOR SHOPPING!',
+    receiptFooterText: 'Returns accepted in 14 days\nFollow us on IG: @nexpos',
   })
 
   const [hardware, setHardware] = useState({
-    receiptPrinter: false,
+    receiptPrinter: true,
     barcodeScanner: true,
     cardReader: false,
   })
 
   const [security, setSecurity] = useState({
-    requirePin: true,
+    requirePin: false,
     autoLogout: false,
   })
 
   const [saving, setSaving] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
 
   useEffect(() => {
     let cancelled = false
@@ -178,9 +184,14 @@ export default function Settings() {
   }, [])
 
   async function persist(next) {
+    if (!isAdmin) return
     setSaving(true)
+    setSaveMessage('')
     try {
       await updateSettings(next)
+      setSaveMessage('Settings saved.')
+    } catch (err) {
+      setSaveMessage(err?.message || 'Could not save settings.')
     } finally {
       setSaving(false)
     }
@@ -202,20 +213,37 @@ export default function Settings() {
 
   const accessLevels = useMemo(
     () => [
-      { role: 'Admin', desc: 'Full access to all features', tone: 'admin' },
-      { role: 'Manager', desc: 'Reports, inventory, employees', tone: 'manager' },
+      { role: 'Admin', desc: 'Full access: Settings, Sales, Products, Inventory, Customers, Employees, Reports, Discounts', tone: 'admin' },
+      { role: 'Manager', desc: 'Sales, Products, Inventory, Customers, Employees, Reports, Discounts', tone: 'manager' },
       { role: 'Cashier', desc: 'Sales terminal only', tone: 'cashier' },
     ],
     []
   )
+
+  if (!isAdmin) {
+    return (
+      <div className="set-page">
+        <div className="set-header">
+          <div>
+            <div className="set-title">Settings</div>
+            <div className="set-subtitle">Admin access required to configure NexPos.</div>
+          </div>
+        </div>
+        <div className="set-card set-accessDenied">
+          Only Admin users can view and update system settings. Contact your administrator.
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="set-page">
       <div className="set-header">
         <div>
           <div className="set-title">Settings</div>
-          <div className="set-subtitle">Configure your POS system preferences</div>
+          <div className="set-subtitle">Configure NexPos — Admin access for {user?.name || 'Admin'}</div>
         </div>
+        {saveMessage ? <div className="set-saveMessage">{saveMessage}</div> : null}
       </div>
 
       <div className="set-tabs" role="tablist" aria-label="Settings tabs">
@@ -255,6 +283,42 @@ export default function Settings() {
                   value={business.name}
                   onChange={(e) => setBusiness((p) => ({ ...p, name: e.target.value }))}
                   aria-label="Business Name"
+                />
+              </div>
+              <div className="set-field">
+                <div className="set-fieldLabel">System Name</div>
+                <input
+                  className="set-editInput"
+                  value={systemPrefs.systemName}
+                  onChange={(e) => setSystemPrefs((p) => ({ ...p, systemName: e.target.value }))}
+                  aria-label="System Name"
+                />
+              </div>
+              <div className="set-field">
+                <div className="set-fieldLabel">Store ID</div>
+                <input
+                  className="set-editInput"
+                  value={business.storeId || ''}
+                  onChange={(e) => setBusiness((p) => ({ ...p, storeId: e.target.value }))}
+                  aria-label="Store ID"
+                />
+              </div>
+              <div className="set-field">
+                <div className="set-fieldLabel">Register</div>
+                <input
+                  className="set-editInput"
+                  value={business.register || ''}
+                  onChange={(e) => setBusiness((p) => ({ ...p, register: e.target.value }))}
+                  aria-label="Register"
+                />
+              </div>
+              <div className="set-field">
+                <div className="set-fieldLabel">Tax ID</div>
+                <input
+                  className="set-editInput"
+                  value={business.taxId || ''}
+                  onChange={(e) => setBusiness((p) => ({ ...p, taxId: e.target.value }))}
+                  aria-label="Tax ID"
                 />
               </div>
               <div className="set-field">

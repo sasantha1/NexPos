@@ -719,7 +719,7 @@ export default function Report() {
       <div className="rep-chartsGrid">
         {activeTab === 'Daily Z-Report' ? (
           <div className="zrep-wrap" ref={zReportRef}>
-            <ZReportTemplate data={zReport} loading={zReportLoading} storeName={storeName} />
+            <ZReportTemplate data={zReport} loading={zReportLoading} storeName={zReport?.storeName || storeName} />
           </div>
         ) : activeTab === 'Sales Overview' ? (
           <>

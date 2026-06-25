@@ -589,6 +589,7 @@ export default function Dashboard({ user, onLogout }) {
     phone: '',
     taxId: '',
   })
+  const [systemName, setSystemName] = useState('NexPos')
   const [receiptTexts, setReceiptTexts] = useState({
     header: '',
     footer: '',
@@ -610,6 +611,8 @@ export default function Dashboard({ user, onLogout }) {
           phone: res?.business?.phone || '',
           taxId: res?.business?.taxId || '',
         })
+
+        setSystemName(res?.systemPrefs?.systemName || res?.business?.name || 'NexPos')
 
         setReceiptTexts({
           header: res?.receipts?.receiptHeaderText || 'THANK YOU FOR SHOPPING!',
@@ -918,7 +921,7 @@ export default function Dashboard({ user, onLogout }) {
   function currentUserLabel() {
     try {
       const token = localStorage.getItem('token')
-      if (!token) return 'John Admin'
+      if (!token) return user?.name || 'User'
       const payload = decodeJwtPayload(token)
       const email = payload?.email
       const role = payload?.role
@@ -926,7 +929,7 @@ export default function Dashboard({ user, onLogout }) {
     } catch {
       // ignore
     }
-    return 'John Admin'
+    return user?.name || 'User'
   }
 
   async function downloadBillPdf(bill) {
@@ -1062,8 +1065,8 @@ export default function Dashboard({ user, onLogout }) {
         <div className="pos-brand">
           <img className="pos-brand-logo" src="/logo.png" alt="NexPos" />
           <div>
-            <div className="pos-brand-title">NexPos</div>
-            <div className="pos-brand-subtitle">Wholesale and Retail</div>
+            <div className="pos-brand-title">{systemName}</div>
+            <div className="pos-brand-subtitle">{businessInfo.name || 'Wholesale and Retail'}</div>
           </div>
         </div>
 
@@ -1123,7 +1126,7 @@ export default function Dashboard({ user, onLogout }) {
         </main>
       ) : activeNav === 'settings' ? (
         <main className="pos-main pos-inventoryMain">
-          <Settings />
+          <Settings user={user} />
         </main>
       ) : (
         <>

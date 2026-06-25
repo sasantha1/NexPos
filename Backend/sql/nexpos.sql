@@ -179,33 +179,37 @@ INSERT INTO discounts (id, name, type, value, code, active) VALUES
 -- Seed settings
 INSERT INTO settings_kv (`key`, `value`) VALUES
   ('business', JSON_OBJECT(
-    'name', 'QuickPOS',
-    'address', '123 Main St City, State 12345',
-    'phone', '(555) 123-4567',
-    'email', 'contact@business.com'
+    'name', 'NexPos',
+    'address', '',
+    'phone', '',
+    'email', '',
+    'taxId', '',
+    'storeId', '#0001',
+    'register', 'POS-01'
   )),
   ('systemPrefs', JSON_OBJECT(
+    'systemName', 'NexPos',
     'soundEffects', TRUE,
     'lowStockAlerts', TRUE,
     'loyaltyProgram', TRUE
   )),
   ('tax', JSON_OBJECT(
-    'defaultTaxRate', 8.5,
-    'appliedTaxRate', 8.5
+    'defaultTaxRate', 0,
+    'appliedTaxRate', 0
   )),
   ('receipts', JSON_OBJECT(
     'printReceipts', TRUE,
     'emailReceipts', FALSE,
-    'receiptHeaderText', 'Thank you for shopping with us!',
-    'receiptFooterText', 'Please come again!'
+    'receiptHeaderText', 'THANK YOU FOR SHOPPING!',
+    'receiptFooterText', 'Returns accepted in 14 days\nFollow us on IG: @nexpos'
   )),
   ('hardware', JSON_OBJECT(
-    'receiptPrinter', FALSE,
+    'receiptPrinter', TRUE,
     'barcodeScanner', TRUE,
     'cardReader', FALSE
   )),
   ('security', JSON_OBJECT(
-    'requirePin', TRUE,
+    'requirePin', FALSE,
     'autoLogout', FALSE
   ));
 

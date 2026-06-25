@@ -98,12 +98,29 @@ router.get('/z-report', optionalAuth, async (req, res, next) => {
 
     const cashTotal = totalCollected
 
+    let storeName = 'NexPos'
+    let storeId = '#0001'
+    let register = 'POS-01'
+    try {
+      const [settingsRows] = await pool.query(`SELECT \`key\`, value FROM settings_kv WHERE \`key\` = 'business' LIMIT 1`)
+      const business = settingsRows[0]?.value
+      const parsed = typeof business === 'object' ? business : business ? JSON.parse(business) : null
+      if (parsed) {
+        storeName = parsed.name || storeName
+        storeId = parsed.storeId || storeId
+        register = parsed.register || register
+      }
+    } catch {
+      // keep defaults
+    }
+
     res.json({
       date: reportDate,
       sessionStart: formatTime(fin.sessionStart),
       sessionEnd: formatTime(fin.sessionEnd),
-      register: 'POS-01',
-      storeId: '#0001',
+      register,
+      storeId,
+      storeName,
       financial: {
         grossSales,
         totalDiscounts,

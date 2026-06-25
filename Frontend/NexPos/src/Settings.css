@@ -21,6 +21,20 @@
   color: rgba(255, 255, 255, 0.62);
 }
 
+.set-saveMessage {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #86efac;
+}
+
+.set-accessDenied {
+  margin: 0 16px;
+  padding: 18px;
+  color: rgba(255, 255, 255, 0.78);
+  font-weight: 700;
+}
+
 .set-tabs {
   padding: 0 16px 14px;
   display: flex;

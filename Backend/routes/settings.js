@@ -1,43 +1,46 @@
 const router = require('express').Router()
 
 const { getPool } = require('../db')
-const { optionalAuth } = require('../middleware/auth')
+const { optionalAuth, requireAuth, requireAdmin } = require('../middleware/auth')
 
 const DEFAULTS = {
   business: {
-    name: 'QuickPOS',
+    name: 'NexPos',
     address: '',
     phone: '',
     email: '',
+    taxId: '',
+    storeId: '#0001',
+    register: 'POS-01',
   },
   systemPrefs: {
+    systemName: 'NexPos',
     soundEffects: true,
     lowStockAlerts: true,
     loyaltyProgram: true,
   },
   tax: {
-    defaultTaxRate: 8.5,
-    appliedTaxRate: 8.5,
+    defaultTaxRate: 0,
+    appliedTaxRate: 0,
   },
   receipts: {
     printReceipts: true,
     emailReceipts: false,
-    receiptHeaderText: 'Thank you for shopping with us!',
-    receiptFooterText: 'Please come again!',
+    receiptHeaderText: 'THANK YOU FOR SHOPPING!',
+    receiptFooterText: 'Returns accepted in 14 days\nFollow us on IG: @nexpos',
   },
   hardware: {
-    receiptPrinter: false,
+    receiptPrinter: true,
     barcodeScanner: true,
     cardReader: false,
   },
   security: {
-    requirePin: true,
+    requirePin: false,
     autoLogout: false,
   },
 }
 
 function safeValue(value) {
-  // mysql2 should return JSON as object when possible; but guard for string.
   if (value === null || value === undefined) return null
   if (typeof value === 'object') return value
   try {
@@ -45,6 +48,11 @@ function safeValue(value) {
   } catch {
     return null
   }
+}
+
+function mergeDefaults(key, saved) {
+  const base = DEFAULTS[key] || {}
+  return { ...base, ...(saved || {}) }
 }
 
 router.get('/', optionalAuth, async (req, res, next) => {
@@ -59,7 +67,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
     const out = { ...DEFAULTS }
     for (const r of rows) {
       const parsed = safeValue(r.value)
-      if (parsed) out[r.key] = parsed
+      if (parsed) out[r.key] = mergeDefaults(r.key, parsed)
     }
     res.json(out)
   } catch (err) {
@@ -67,32 +75,32 @@ router.get('/', optionalAuth, async (req, res, next) => {
   }
 })
 
-router.put('/', optionalAuth, async (req, res, next) => {
+router.put('/', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     const pool = getPool()
     const body = req.body || {}
 
     const toUpsert = {
-      business: body.business || DEFAULTS.business,
-      systemPrefs: body.systemPrefs || DEFAULTS.systemPrefs,
-      tax: body.tax || DEFAULTS.tax,
-      receipts: body.receipts || DEFAULTS.receipts,
-      hardware: body.hardware || DEFAULTS.hardware,
-      security: body.security || DEFAULTS.security,
+      business: mergeDefaults('business', body.business),
+      systemPrefs: mergeDefaults('systemPrefs', body.systemPrefs),
+      tax: mergeDefaults('tax', body.tax),
+      receipts: mergeDefaults('receipts', body.receipts),
+      hardware: mergeDefaults('hardware', body.hardware),
+      security: mergeDefaults('security', body.security),
     }
 
     const conn = await pool.getConnection()
     try {
       await conn.beginTransaction()
       for (const key of Object.keys(toUpsert)) {
-        const value = toUpsert[key]
+        const jsonValue = JSON.stringify(toUpsert[key])
         await conn.query(
           `
             INSERT INTO settings_kv (\`key\`, \`value\`)
-            VALUES (?, CAST(? AS JSON))
-            ON DUPLICATE KEY UPDATE \`value\` = CAST(? AS JSON)
+            VALUES (?, ?)
+            ON DUPLICATE KEY UPDATE \`value\` = ?
           `,
-          [key, JSON.stringify(value), JSON.stringify(value)]
+          [key, jsonValue, jsonValue]
         )
       }
       await conn.commit()
@@ -110,4 +118,3 @@ router.put('/', optionalAuth, async (req, res, next) => {
 })
 
 module.exports = router
-
