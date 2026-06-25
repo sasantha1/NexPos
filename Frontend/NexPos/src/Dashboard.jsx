@@ -11,6 +11,7 @@ import { getSettings } from './api/settingsApi'
 import { resolveDiscountByCode } from './api/discountsApi'
 import { checkout as checkoutOrder } from './api/ordersApi'
 import { listProducts } from './api/productsApi'
+import { createCustomer, listCustomers } from './api/customersApi'
 
 const NAV_ITEMS = [
   { id: 'sales', label: 'Sales' },
@@ -516,6 +517,15 @@ export default function Dashboard({ user, onLogout }) {
   const [receipt, setReceipt] = useState(null)
   const receiptRef = useRef(null)
   const [downloadingBill, setDownloadingBill] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [showCustomerModal, setShowCustomerModal] = useState(false)
+  const [customerModalView, setCustomerModalView] = useState('list')
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [customers, setCustomers] = useState([])
+  const [customersLoading, setCustomersLoading] = useState(false)
+  const [customerError, setCustomerError] = useState('')
+  const [customerSaving, setCustomerSaving] = useState(false)
+  const [newCustomerForm, setNewCustomerForm] = useState({ name: '', email: '', phone: '' })
 
   const [businessInfo, setBusinessInfo] = useState({
     name: 'NexPos',
@@ -579,6 +589,84 @@ export default function Dashboard({ user, onLogout }) {
     if (activeNav === 'sales') refreshProducts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNav])
+
+  async function loadCustomers(search = '') {
+    setCustomersLoading(true)
+    try {
+      const res = await listCustomers(search)
+      setCustomers(res?.items || [])
+    } catch {
+      setCustomers([])
+    } finally {
+      setCustomersLoading(false)
+    }
+  }
+
+  function openCustomerModal() {
+    setCustomerModalView('list')
+    setCustomerQuery('')
+    setCustomerError('')
+    setNewCustomerForm({ name: '', email: '', phone: '' })
+    setShowCustomerModal(true)
+    loadCustomers('')
+  }
+
+  function closeCustomerModal() {
+    setShowCustomerModal(false)
+    setCustomerError('')
+  }
+
+  function selectCustomer(customer) {
+    setSelectedCustomer(customer)
+    closeCustomerModal()
+  }
+
+  function clearSelectedCustomer() {
+    setSelectedCustomer(null)
+  }
+
+  async function saveNewCustomer() {
+    const name = newCustomerForm.name.trim()
+    const email = newCustomerForm.email.trim()
+    const phone = newCustomerForm.phone.trim()
+    if (!name || !email) {
+      setCustomerError('Name and email are required.')
+      return
+    }
+
+    setCustomerSaving(true)
+    setCustomerError('')
+    try {
+      const res = await createCustomer({
+        name,
+        email,
+        phone: phone || null,
+        loyaltyPoints: 0,
+        totalSpent: 0,
+      })
+      selectCustomer({
+        id: res?.id || email.toLowerCase(),
+        name,
+        email,
+        phone,
+        loyaltyPoints: 0,
+        totalSpent: 0,
+      })
+    } catch (err) {
+      setCustomerError(err?.message || 'Could not add customer.')
+    } finally {
+      setCustomerSaving(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!showCustomerModal || customerModalView !== 'list') return undefined
+    const timer = window.setTimeout(() => {
+      loadCustomers(customerQuery.trim())
+    }, 250)
+    return () => window.clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showCustomerModal, customerModalView, customerQuery])
 
   const categories = useMemo(() => {
     const values = Array.from(new Set(products.map((p) => p.category).filter(Boolean)))
@@ -773,7 +861,7 @@ export default function Dashboard({ user, onLogout }) {
 
       const payload = {
         items: cartItems.map(({ product, qty }) => ({ productId: product.id, quantity: qty })),
-        customerId: null,
+        customerId: selectedCustomer?.id || null,
         employeeId: user?.id || null,
         discountCode: appliedDiscount?.code || null,
       }
@@ -810,7 +898,7 @@ export default function Dashboard({ user, onLogout }) {
         dateTime: now,
         user: receiptUser,
         cashierName: user?.name || 'Cashier',
-        customerName: 'Walk-in Customer',
+        customerName: selectedCustomer?.name || 'Walk-in Customer',
         paymentMethod,
         cashAmount: cashNumber,
         paidAmount,
@@ -832,6 +920,7 @@ export default function Dashboard({ user, onLogout }) {
       setCart({})
       setDiscountCode('')
       setAppliedDiscount(null)
+      setSelectedCustomer(null)
       setShowPaymentModal(false)
       setShowReceiptModal(true)
       await refreshProducts()
@@ -993,6 +1082,7 @@ export default function Dashboard({ user, onLogout }) {
                   setCart({})
                   setDiscountCode('')
                   setAppliedDiscount(null)
+                  setSelectedCustomer(null)
                 }}
               >
                 <IconTrash />
@@ -1000,12 +1090,29 @@ export default function Dashboard({ user, onLogout }) {
               </button>
             </div>
 
-            <div className="pos-customerRow">
-              <div className="pos-customerText">
-                <div className="pos-customerTitle">Add Customer</div>
-                <div className="pos-customerSub">Optional</div>
+            {selectedCustomer ? (
+              <div className="pos-customerRow pos-customerRowSelected">
+                <div className="pos-customerText">
+                  <div className="pos-customerTitle">{selectedCustomer.name}</div>
+                  <div className="pos-customerSub">
+                    {selectedCustomer.phone || selectedCustomer.email || 'Customer linked to order'}
+                  </div>
+                </div>
+                <button className="pos-customerChangeBtn" type="button" onClick={openCustomerModal}>
+                  Change
+                </button>
+                <button className="pos-customerRemoveBtn" type="button" onClick={clearSelectedCustomer} aria-label="Remove customer">
+                  ×
+                </button>
               </div>
-            </div>
+            ) : (
+              <button className="pos-customerRow pos-customerRowBtn" type="button" onClick={openCustomerModal}>
+                <div className="pos-customerText">
+                  <div className="pos-customerTitle">Add Customer</div>
+                  <div className="pos-customerSub">Optional — search or create</div>
+                </div>
+              </button>
+            )}
 
             <div className="pos-cartList">
               {cartItems.length === 0 ? (
@@ -1205,6 +1312,120 @@ export default function Dashboard({ user, onLogout }) {
                 <button className="pos-payComplete" type="button" disabled={!canCompleteSale} onClick={completeSale}>
                   {isCompletingSale ? 'Processing...' : 'Complete Sale'}
                 </button>
+              </div>
+            </div>
+          ) : null}
+
+          {showCustomerModal ? (
+            <div className="pos-payBackdrop" role="dialog" aria-modal="true" aria-label="Add customer">
+              <div className="pos-customerModal">
+                <button className="pos-payClose" type="button" onClick={closeCustomerModal} aria-label="Close customer dialog">
+                  ×
+                </button>
+
+                <div className="pos-customerModalTitle">
+                  {customerModalView === 'add' ? 'Add New Customer' : 'Select Customer'}
+                </div>
+
+                {customerModalView === 'list' ? (
+                  <>
+                    <input
+                      className="pos-input pos-customerSearch"
+                      value={customerQuery}
+                      onChange={(e) => setCustomerQuery(e.target.value)}
+                      placeholder="Search by name, email, or phone..."
+                      aria-label="Search customers"
+                    />
+
+                    <div className="pos-customerList">
+                      {customersLoading ? (
+                        <div className="pos-customerListEmpty">Loading customers...</div>
+                      ) : customers.length === 0 ? (
+                        <div className="pos-customerListEmpty">No customers found.</div>
+                      ) : (
+                        customers.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="pos-customerListItem"
+                            onClick={() => selectCustomer(c)}
+                          >
+                            <div className="pos-customerListName">{c.name}</div>
+                            <div className="pos-customerListMeta">
+                              {c.email}{c.phone ? ` · ${c.phone}` : ''}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    <button
+                      className="pos-customerAddNewBtn"
+                      type="button"
+                      onClick={() => {
+                        setCustomerModalView('add')
+                        setCustomerError('')
+                      }}
+                    >
+                      + Add New Customer
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className="pos-customerForm">
+                      <label className="pos-customerField">
+                        <span>Full name</span>
+                        <input
+                          className="pos-input"
+                          value={newCustomerForm.name}
+                          onChange={(e) => setNewCustomerForm((p) => ({ ...p, name: e.target.value }))}
+                          placeholder="Customer name"
+                        />
+                      </label>
+                      <label className="pos-customerField">
+                        <span>Email</span>
+                        <input
+                          className="pos-input"
+                          value={newCustomerForm.email}
+                          onChange={(e) => setNewCustomerForm((p) => ({ ...p, email: e.target.value }))}
+                          placeholder="email@example.com"
+                        />
+                      </label>
+                      <label className="pos-customerField">
+                        <span>Phone</span>
+                        <input
+                          className="pos-input"
+                          value={newCustomerForm.phone}
+                          onChange={(e) => setNewCustomerForm((p) => ({ ...p, phone: e.target.value }))}
+                          placeholder="Phone number (optional)"
+                        />
+                      </label>
+                    </div>
+
+                    {customerError ? <div className="pos-payError">{customerError}</div> : null}
+
+                    <div className="pos-customerModalActions">
+                      <button
+                        className="pos-customerSecondaryBtn"
+                        type="button"
+                        onClick={() => {
+                          setCustomerModalView('list')
+                          setCustomerError('')
+                        }}
+                      >
+                        Back
+                      </button>
+                      <button
+                        className="pos-customerPrimaryBtn"
+                        type="button"
+                        onClick={saveNewCustomer}
+                        disabled={customerSaving}
+                      >
+                        {customerSaving ? 'Saving...' : 'Save Customer'}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           ) : null}
