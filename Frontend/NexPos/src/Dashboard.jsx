@@ -871,9 +871,6 @@ export default function Dashboard({ user, onLogout }) {
 
         <div className="pos-admin">
           <div className="pos-admin-left">
-            <div className="pos-admin-avatar" aria-hidden="true">
-              JA
-            </div>
             <div>
               <div className="pos-admin-name">{user?.name || 'User'}</div>
               <div className="pos-admin-role">{user?.role || 'Cashier'}</div>
@@ -964,10 +961,6 @@ export default function Dashboard({ user, onLogout }) {
                     aria-label={`Add ${p.name} to order`}
                     disabled={isOut}
                   >
-                    <div className="pos-productTop">
-                      <div className="pos-productIcon" aria-hidden="true" />
-                      <div className="pos-productIconBadge" aria-hidden="true" />
-                    </div>
                     <div className="pos-productName">{p.name}</div>
                     <div className="pos-productBottom">
                       <div className="pos-productPrice">{money(p.price)}</div>
@@ -1008,7 +1001,6 @@ export default function Dashboard({ user, onLogout }) {
             </div>
 
             <div className="pos-customerRow">
-              <div className="pos-customerIcon" aria-hidden="true" />
               <div className="pos-customerText">
                 <div className="pos-customerTitle">Add Customer</div>
                 <div className="pos-customerSub">Optional</div>
