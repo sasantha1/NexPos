@@ -14,6 +14,128 @@ function formatLabel(date) {
   return date.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })
 }
 
+function formatTime(date) {
+  if (!date) return '—'
+  const d = date instanceof Date ? date : new Date(date)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function toMoney(n) {
+  const x = Number(n)
+  return Number.isFinite(x) ? Math.round(x * 100) / 100 : 0
+}
+
+function parseReportDate(dateStr) {
+  const value = (dateStr || '').toString().trim()
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  return new Date().toISOString().slice(0, 10)
+}
+
+router.get('/z-report', optionalAuth, async (req, res, next) => {
+  try {
+    const pool = getPool()
+    const reportDate = parseReportDate(req.query.date)
+    const startTs = `${reportDate} 00:00:00`
+    const endTs = `${reportDate} 23:59:59`
+
+    const [finRows] = await pool.query(
+      `
+        SELECT
+          COALESCE(SUM(subtotal), 0) AS grossSales,
+          COALESCE(SUM(discount_total), 0) AS totalDiscounts,
+          COALESCE(SUM(tax_total), 0) AS taxCollected,
+          COALESCE(SUM(total), 0) AS totalCollected,
+          COUNT(*) AS transactions,
+          MIN(created_at) AS sessionStart,
+          MAX(created_at) AS sessionEnd,
+          MAX(tax_rate) AS taxRate
+        FROM orders
+        WHERE created_at BETWEEN ? AND ?
+      `,
+      [startTs, endTs]
+    )
+    const fin = finRows[0] || {}
+    const grossSales = toMoney(fin.grossSales)
+    const totalDiscounts = toMoney(fin.totalDiscounts)
+    const totalRefunds = 0
+    const netRevenue = toMoney(grossSales - totalDiscounts - totalRefunds)
+    const taxCollected = toMoney(fin.taxCollected)
+    const totalCollected = toMoney(fin.totalCollected)
+    const taxRate = toMoney(fin.taxRate)
+
+    const [laborRows] = await pool.query(
+      `
+        SELECT
+          COALESCE(e.name, 'Unknown') AS name,
+          COUNT(*) AS transactions,
+          COALESCE(SUM(o.total), 0) AS total
+        FROM orders o
+        LEFT JOIN employees e ON e.id = o.employee_id
+        WHERE o.created_at BETWEEN ? AND ?
+        GROUP BY o.employee_id, e.name
+        ORDER BY total DESC
+      `,
+      [startTs, endTs]
+    )
+
+    const [catRows] = await pool.query(
+      `
+        SELECT
+          p.category,
+          COALESCE(SUM(oi.quantity), 0) AS qty,
+          COALESCE(SUM(oi.line_total), 0) AS gross
+        FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        JOIN products p ON p.id = oi.product_id
+        WHERE o.created_at BETWEEN ? AND ?
+        GROUP BY p.category
+        ORDER BY gross DESC
+        LIMIT 5
+      `,
+      [startTs, endTs]
+    )
+
+    const cashTotal = totalCollected
+
+    res.json({
+      date: reportDate,
+      sessionStart: formatTime(fin.sessionStart),
+      sessionEnd: formatTime(fin.sessionEnd),
+      register: 'POS-01',
+      storeId: '#0001',
+      financial: {
+        grossSales,
+        totalDiscounts,
+        totalRefunds,
+        netRevenue,
+        taxRate,
+        taxCollected,
+        totalCollected,
+      },
+      tender: {
+        cash: { expected: cashTotal, actual: cashTotal },
+        card: { expected: 0, actual: 0 },
+        mobile: { expected: 0, actual: 0 },
+        discrepancy: 0,
+      },
+      labor: laborRows.map((r) => ({
+        name: r.name,
+        transactions: Number(r.transactions || 0),
+        total: toMoney(r.total),
+      })),
+      topCategories: catRows.map((r, i) => ({
+        rank: i + 1,
+        category: r.category || 'Uncategorized',
+        qty: Number(r.qty || 0),
+        gross: toMoney(r.gross),
+      })),
+    })
+  } catch (err) {
+    next(err)
+  }
+})
+
 router.get('/summary', optionalAuth, async (req, res, next) => {
   try {
     const pool = getPool()

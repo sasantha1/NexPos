@@ -352,3 +352,119 @@
   }
 }
 
+.rep-dateInput {
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.9);
+  padding: 0 12px;
+  outline: none;
+  font-weight: 900;
+  font-family: inherit;
+}
+
+/* Daily Z-Report (80mm ESC/POS style) */
+.zrep-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  grid-column: 1 / -1;
+}
+
+.zrep-ticket {
+  width: 80mm;
+  max-width: 100%;
+  background: #ffffff;
+  color: #000000;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 4mm 3mm;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+.zrep-title {
+  text-align: center;
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  margin: 4px 0;
+}
+
+.zrep-sectionTitle {
+  text-align: center;
+  font-weight: 700;
+  font-size: 10px;
+  margin: 2px 0;
+}
+
+.zrep-center {
+  text-align: center;
+  padding: 8px 0;
+}
+
+.zrep-spacer {
+  height: 8px;
+}
+
+.zrep-metaLine {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  margin: 2px 0;
+}
+
+.zrep-metaFull {
+  font-size: 10px;
+  margin: 2px 0;
+}
+
+.zrep-ruleHeavy,
+.zrep-ruleLight {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  line-height: 1;
+  margin: 5px 0;
+}
+
+.zrep-ruleHeavy::before {
+  content: '==================================================';
+}
+
+.zrep-ruleLight::before {
+  content: '--------------------------------------------------';
+}
+
+.zrep-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  margin: 2px 0;
+}
+
+.zrep-rowTotal {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.zrep-tenderRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 9px;
+  margin: 2px 0;
+  flex-wrap: wrap;
+}
+
+.zrep-laborRow,
+.zrep-categoryRow {
+  font-size: 10px;
+  margin: 3px 0;
+  word-break: break-word;
+}
+

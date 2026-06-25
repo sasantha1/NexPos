@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './Report.css'
-import { getReportsSummary } from './api/reportsApi'
+import { getReportsSummary, getZReport } from './api/reportsApi'
+import { getSettings } from './api/settingsApi'
 import { getInventoryItems, getInventoryStats } from './api/inventoryApi'
 
 function money(amount) {
@@ -349,6 +350,131 @@ function TopProductsByStockValueCard({ items }) {
   )
 }
 
+function todayIsoDate() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function ZReportTemplate({ data, loading, storeName }) {
+  if (loading) {
+    return (
+      <div className="zrep-ticket">
+        <div className="zrep-center">Loading daily summary...</div>
+      </div>
+    )
+  }
+
+  if (!data) {
+    return (
+      <div className="zrep-ticket">
+        <div className="zrep-center">No Z-Report data available.</div>
+      </div>
+    )
+  }
+
+  const fin = data.financial || {}
+  const tender = data.tender || {}
+
+  return (
+    <div className="zrep-ticket">
+      <div className="zrep-ruleHeavy" />
+      <div className="zrep-title">DAILY SUMMARY REPORT (Z-REPORT)</div>
+      <div className="zrep-ruleHeavy" />
+
+      <div className="zrep-metaLine">
+        <span>Store: {storeName || 'NexPos'}</span>
+        <span>ID: {data.storeId || '#0001'}</span>
+      </div>
+      <div className="zrep-metaLine">
+        <span>Date: {data.date}</span>
+        <span>Register: {data.register || 'POS-01'}</span>
+      </div>
+      <div className="zrep-metaFull">Session: {data.sessionStart || '—'} - {data.sessionEnd || '—'}</div>
+
+      <div className="zrep-ruleLight" />
+      <div className="zrep-sectionTitle">FINANCIAL SUMMARY</div>
+      <div className="zrep-ruleLight" />
+
+      <div className="zrep-row">
+        <span>Gross Sales:</span>
+        <span>{money(fin.grossSales)}</span>
+      </div>
+      <div className="zrep-row">
+        <span>(-) Total Discounts:</span>
+        <span>-{money(fin.totalDiscounts)}</span>
+      </div>
+      <div className="zrep-row">
+        <span>(-) Total Refunds:</span>
+        <span>-{money(fin.totalRefunds)}</span>
+      </div>
+      <div className="zrep-row">
+        <span>Net Revenue:</span>
+        <span>{money(fin.netRevenue)}</span>
+      </div>
+      <div className="zrep-row">
+        <span>(+) Tax Collected ({fin.taxRate || 0}%):</span>
+        <span>{money(fin.taxCollected)}</span>
+      </div>
+
+      <div className="zrep-ruleHeavy" />
+      <div className="zrep-row zrep-rowTotal">
+        <span>TOTAL COLLECTED:</span>
+        <strong>{money(fin.totalCollected)}</strong>
+      </div>
+      <div className="zrep-ruleLight" />
+
+      <div className="zrep-sectionTitle">TENDER RECONCILIATION</div>
+      <div className="zrep-ruleLight" />
+
+      <div className="zrep-tenderRow">
+        <span>Cash Expected:</span>
+        <span>{money(tender.cash?.expected)} | Actual: {money(tender.cash?.actual)}</span>
+      </div>
+      <div className="zrep-tenderRow">
+        <span>Visa/Mastercard:</span>
+        <span>{money(tender.card?.expected)} | Actual: {money(tender.card?.actual)}</span>
+      </div>
+      <div className="zrep-tenderRow">
+        <span>Mobile Wallet:</span>
+        <span>{money(tender.mobile?.expected)} | Actual: {money(tender.mobile?.actual)}</span>
+      </div>
+      <div className="zrep-row">
+        <span>Discrepancy (Short/Over):</span>
+        <span>{money(tender.discrepancy)}</span>
+      </div>
+
+      <div className="zrep-ruleLight" />
+      <div className="zrep-sectionTitle">LABOR PERFORMANCE</div>
+      <div className="zrep-ruleLight" />
+
+      {(data.labor || []).length === 0 ? (
+        <div className="zrep-center">No cashier activity recorded.</div>
+      ) : (
+        (data.labor || []).map((row) => (
+          <div key={`${row.name}-${row.transactions}`} className="zrep-laborRow">
+            Cashier: {row.name} &nbsp;&nbsp; Transactions: {row.transactions} &nbsp; Total: {money(row.total)}
+          </div>
+        ))
+      )}
+
+      <div className="zrep-ruleLight" />
+      <div className="zrep-sectionTitle">TOP PERFORMING CATEGORIES</div>
+      <div className="zrep-ruleLight" />
+
+      {(data.topCategories || []).length === 0 ? (
+        <div className="zrep-center">No category sales recorded.</div>
+      ) : (
+        (data.topCategories || []).map((row) => (
+          <div key={row.category} className="zrep-categoryRow">
+            {row.rank}. {row.category} &nbsp;&nbsp; Qty: {row.qty} &nbsp;&nbsp; Gross: {money(row.gross)}
+          </div>
+        ))
+      )}
+
+      <div className="zrep-spacer" />
+    </div>
+  )
+}
+
 export default function Report() {
   const [range, setRange] = useState('Last 7 days')
   const [activeTab, setActiveTab] = useState('Sales Overview')
@@ -357,7 +483,12 @@ export default function Report() {
   const [inventoryItems, setInventoryItems] = useState([])
   const [inventoryStats, setInventoryStats] = useState(null)
   const [downloading, setDownloading] = useState(false)
+  const [zReport, setZReport] = useState(null)
+  const [zReportLoading, setZReportLoading] = useState(false)
+  const [zReportDate, setZReportDate] = useState(todayIsoDate())
+  const [storeName, setStoreName] = useState('NexPos')
   const exportRef = useRef(null)
+  const zReportRef = useRef(null)
 
   useEffect(() => {
     let cancelled = false
@@ -408,6 +539,45 @@ export default function Report() {
     }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    async function loadSettings() {
+      try {
+        const settings = await getSettings()
+        if (cancelled) return
+        setStoreName(settings?.business?.name || 'NexPos')
+      } catch {
+        if (!cancelled) setStoreName('NexPos')
+      }
+    }
+    loadSettings()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeTab !== 'Daily Z-Report') return undefined
+    let cancelled = false
+    async function loadZReport() {
+      setZReportLoading(true)
+      try {
+        const res = await getZReport(zReportDate)
+        if (cancelled) return
+        setZReport(res)
+      } catch {
+        if (cancelled) return
+        setZReport(null)
+      } finally {
+        if (!cancelled) setZReportLoading(false)
+      }
+    }
+    loadZReport()
+    return () => {
+      cancelled = true
+    }
+  }, [activeTab, zReportDate])
+
   const statCards = useMemo(() => {
     const s = report?.stats
     if (!s) {
@@ -428,7 +598,9 @@ export default function Report() {
   }, [report, loading])
 
   async function downloadPdf() {
-    if (!exportRef.current || downloading) return
+    const isZReport = activeTab === 'Daily Z-Report'
+    const target = isZReport ? zReportRef.current : exportRef.current
+    if (!target || downloading) return
     setDownloading(true)
     try {
       const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
@@ -436,13 +608,23 @@ export default function Report() {
         import('jspdf'),
       ])
 
-      const canvas = await html2canvas(exportRef.current, {
+      const canvas = await html2canvas(target, {
         scale: 2,
         useCORS: true,
-        backgroundColor: '#0b0f15',
+        backgroundColor: isZReport ? '#ffffff' : '#0b0f15',
       })
 
       const imgData = canvas.toDataURL('image/png')
+
+      if (isZReport) {
+        const pdfWidth = 80
+        const pdfHeight = Math.max((canvas.height * pdfWidth) / canvas.width, 40)
+        const pdf = new jsPDF({ unit: 'mm', format: [pdfWidth, pdfHeight] })
+        pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight)
+        pdf.save(`nexpos-z-report-${zReportDate}.pdf`)
+        return
+      }
+
       const pdf = new jsPDF('p', 'mm', 'a4')
 
       const pageWidth = pdf.internal.pageSize.getWidth()
@@ -478,37 +660,49 @@ export default function Report() {
         </div>
 
         <div className="rep-headActions">
-          <div className="rep-range">
-            <label className="rep-rangeLabel" htmlFor="repRange">
-              Last 7 days
-            </label>
-            <select id="repRange" className="rep-select" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Select date range">
-              <option>Last 7 days</option>
-              <option>Last 30 days</option>
-              <option>Last 90 days</option>
-            </select>
-          </div>
-          <button className="rep-downloadBtn" type="button" onClick={downloadPdf} disabled={downloading}>
-            {downloading ? 'Generating...' : 'Download PDF'}
+          {activeTab === 'Daily Z-Report' ? (
+            <input
+              type="date"
+              className="rep-dateInput"
+              value={zReportDate}
+              onChange={(e) => setZReportDate(e.target.value)}
+              aria-label="Z-Report date"
+            />
+          ) : (
+            <div className="rep-range">
+              <label className="rep-rangeLabel" htmlFor="repRange">
+                Last 7 days
+              </label>
+              <select id="repRange" className="rep-select" value={range} onChange={(e) => setRange(e.target.value)} aria-label="Select date range">
+                <option>Last 7 days</option>
+                <option>Last 30 days</option>
+                <option>Last 90 days</option>
+              </select>
+            </div>
+          )}
+          <button className="rep-downloadBtn" type="button" onClick={downloadPdf} disabled={downloading || (activeTab === 'Daily Z-Report' && zReportLoading)}>
+            {downloading ? 'Generating...' : activeTab === 'Daily Z-Report' ? 'Download Z-Report' : 'Download PDF'}
           </button>
         </div>
       </div>
 
-      <div className="rep-statsRow">
-        {statCards.map((c) => (
-          <div key={c.label} className="rep-stat">
-            <div className="rep-statTop">
-              <div className="rep-statLabel">{c.label}</div>
-              <div className="rep-statIcon">{c.icon}</div>
+      {activeTab !== 'Daily Z-Report' ? (
+        <div className="rep-statsRow">
+          {statCards.map((c) => (
+            <div key={c.label} className="rep-stat">
+              <div className="rep-statTop">
+                <div className="rep-statLabel">{c.label}</div>
+                <div className="rep-statIcon">{c.icon}</div>
+              </div>
+              <div className="rep-statValue">{c.value}</div>
+              <div className={`rep-delta rep-delta-${c.tone}`}>{c.delta} <span className="rep-deltaSub">from last period</span></div>
             </div>
-            <div className="rep-statValue">{c.value}</div>
-            <div className={`rep-delta rep-delta-${c.tone}`}>{c.delta} <span className="rep-deltaSub">from last period</span></div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
       <div className="rep-tabs" role="tablist" aria-label="Reports tabs">
-        {['Sales Overview', 'Product Performance', 'Employee Performance'].map((t) => (
+        {['Sales Overview', 'Product Performance', 'Employee Performance', 'Daily Z-Report'].map((t) => (
           <button
             key={t}
             type="button"
@@ -523,7 +717,11 @@ export default function Report() {
       </div>
 
       <div className="rep-chartsGrid">
-        {activeTab === 'Sales Overview' ? (
+        {activeTab === 'Daily Z-Report' ? (
+          <div className="zrep-wrap" ref={zReportRef}>
+            <ZReportTemplate data={zReport} loading={zReportLoading} storeName={storeName} />
+          </div>
+        ) : activeTab === 'Sales Overview' ? (
           <>
             <RevenueTrendCard points={report?.trend?.points} labels={report?.trend?.labels} />
             <SalesByCategoryCard segments={report?.salesByCategory} totalRevenue={report?.stats?.totalRevenue} />

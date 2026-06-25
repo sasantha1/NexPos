@@ -4,5 +4,9 @@ async function getReportsSummary(range) {
   return apiRequest('/reports/summary', { query: { range: range || '' } })
 }
 
-export { getReportsSummary }
+async function getZReport(date) {
+  return apiRequest('/reports/z-report', { query: { date: date || '' } })
+}
+
+export { getReportsSummary, getZReport }
 
